@@ -1,22 +1,65 @@
+import org.apache.avro.tool.Main
+
+buildscript {
+    dependencies {
+        classpath group: 'org.apache.avro', name: 'avro-tools', version: '1.10.2'
+    }
+}
+
 plugins {
     id 'java'
     id "io.freefair.lombok" version "6.0.0-m2"
 }
+
 group 'org.example'
 version '1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
+    maven {
+        url 'https://packages.confluent.io/maven/'
+    }
+}
+
+final def generatedAvroSourcesDir = new File(project.getBuildDir(), "/generated/sources/avro/src/java")
+
+sourceSets {
+    main {
+        java.srcDirs += generatedAvroSourcesDir
+    }
 }
 
 dependencies {
+    implementation group: 'io.confluent', name: 'kafka-avro-serializer', version: '6.2.0'
     implementation group: 'org.apache.kafka', name: 'kafka-clients', version: '2.7.1'
     implementation 'org.slf4j:slf4j-api:1.7.30'
     implementation 'ch.qos.logback:logback-classic:1.2.3'
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.8.9'
+    implementation group: 'org.springframework', name: 'spring-context', version: '5.3.8'
+    implementation group: 'org.apache.commons', name: 'commons-lang3', version: '3.12.0'
+    implementation group: 'org.apache.avro', name: 'avro', version: '1.10.2'
 
     testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
     testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
 }
+
+task generateAvroClasses() {
+    doLast {
+        String[] args = ["compile",
+                         "schema",
+                         "src/main/resources/avro/user.avsc",
+                         "src/main/resources/avro/Payment.avsc",
+                         generatedAvroSourcesDir.getAbsolutePath()
+        ]
+        def rc = new Main().run(args)
+        println("Avro result code: " + rc)
+        if (rc != 0) {
+            throw new GradleException("Non-zero result code from avro compiler: " + rc)
+        }
+    }
+}
+
+compileJava.dependsOn generateAvroClasses
 
 test {
     useJUnitPlatform()
