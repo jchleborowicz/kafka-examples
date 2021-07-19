@@ -31,15 +31,14 @@ public class ConsumerBuilder {
                 .bootstrapServers("localhost:9092")
                 .schemaRegistryUrl("http://localhost:8081")
                 .enableAutoCommit(true)
-                .autoCommitIntervalMs(1_000)
-                .autoOffsetReset(ConsumerBuilder.AutoOffsetReset.EARLIEST);
+                .autoCommitIntervalMs(1_000);
     }
 
     public static ConsumerBuilder builder(Class<StringDeserializer> keyDeserializer,
                                           Class<KafkaAvroDeserializer> valueDeserializer) {
         return builder()
-                .config(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
-                .config(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
+                .keyDeserializer(keyDeserializer)
+                .valueDeserializer(valueDeserializer);
     }
 
     public ConsumerBuilder schemaRegistryUrl(String schemaRegistryUrl) {

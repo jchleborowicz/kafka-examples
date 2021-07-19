@@ -7,11 +7,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
+import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Value;
@@ -19,6 +23,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
@@ -59,7 +64,10 @@ public class BuilderGeneratorMain {
             "CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG",
             "CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG",
             "CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG",
-            "CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG");
+            "CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG",
+            "AbstractKafkaSchemaSerDeConfig.KEY_SUBJECT_NAME_STRATEGY_DEFAULT",
+            "AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY_DEFAULT",
+            "AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG");
 
     private static final Set<String> IGNORED_CONSTANT_VALUES = Set.of("JKS");
 
@@ -74,7 +82,26 @@ public class BuilderGeneratorMain {
     private static final Set<String> CONFIGS_WITHOUT_CONSTANT_NAME = Set.of(
             "internal.auto.downgrade.txn.commit",
             "internal.leave.group.on.close",
-            "internal.throw.on.fetch.stable.offset.unsupported"
+            "internal.throw.on.fetch.stable.offset.unsupported",
+            "schema.registry.ssl.cipher.suites",
+            "schema.registry.ssl.enabled.protocols",
+            "schema.registry.ssl.endpoint.identification.algorithm",
+            "schema.registry.ssl.engine.factory.class",
+            "schema.registry.ssl.key.password",
+            "schema.registry.ssl.keymanager.algorithm",
+            "schema.registry.ssl.keystore.certificate.chain",
+            "schema.registry.ssl.keystore.key",
+            "schema.registry.ssl.keystore.location",
+            "schema.registry.ssl.keystore.password",
+            "schema.registry.ssl.keystore.type",
+            "schema.registry.ssl.protocol",
+            "schema.registry.ssl.provider",
+            "schema.registry.ssl.secure.random.implementation",
+            "schema.registry.ssl.trustmanager.algorithm",
+            "schema.registry.ssl.truststore.certificates",
+            "schema.registry.ssl.truststore.location",
+            "schema.registry.ssl.truststore.password",
+            "schema.registry.ssl.truststore.type"
     );
 
     public static final Map<ConfigDef.Type, String> TYPE_BY_CONFIG_TYPE = Map.of(
@@ -99,24 +126,28 @@ public class BuilderGeneratorMain {
                         .filter(field -> Modifier.isPublic(field.getModifiers()))
                         .map(field -> ConstantDef.of(getValue(field),
                                 field.getDeclaringClass().getSimpleName() + "." + field.getName()))
+                        .filter(constantDef -> StringUtils.isNotBlank(constantDef.getConfigName()))
                         .filter(constantDef -> !constantDef.getConfigName().contains(" "))
                         .filter(constantDef -> !IGNORED_CONSTANTS.contains(constantDef.getConstantName()))
                         .filter(constantDef -> !IGNORED_CONSTANT_VALUES.contains(constantDef.getConfigName()))
                         .collect(toMap(ConstantDef::getConfigName, ConstantDef::getConstantName));
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException, NoSuchFieldException, IllegalAccessException {
+        final ConfigDef avroConfig = getAvroProducerConfigDef();
+
         BuilderGeneratorInput.builder()
-                .configDef(ProducerConfig.configDef())
+                .configDefs(Map.of("", ProducerConfig.configDef(), "avroSerializer", avroConfig))
                 .builderClassName("ProducerBuilder")
                 .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ProducerBuilder.java")
                 .constantsClasses(
-                        asList(ProducerConfig.class, SaslConfigs.class, CommonClientConfigs.class, SslConfigs.class))
+                        asList(ProducerConfig.class, SaslConfigs.class, CommonClientConfigs.class, SslConfigs.class,
+                                KafkaAvroSerializerConfig.class, AbstractKafkaSchemaSerDeConfig.class))
                 .build()
                 .generate();
 
         BuilderGeneratorInput.builder()
-                .configDef(ConsumerConfig.configDef())
+                .configDefs(Map.of("", ConsumerConfig.configDef()))
                 .builderClassName("ConsumerBuilder")
                 .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ConsumerBuilder.java")
                 .constantsClasses(
@@ -125,11 +156,33 @@ public class BuilderGeneratorMain {
                 .generate();
     }
 
+    private static ConfigDef getAvroProducerConfigDef() throws NoSuchFieldException, IllegalAccessException {
+        final Field config = KafkaAvroSerializerConfig.class.getDeclaredField("config");
+        config.setAccessible(true);
+        return (ConfigDef) config.get(null);
+    }
+
+    @Value
+    @AllArgsConstructor(staticName = "of")
+    static class ConfigNameDef {
+        String namespace;
+        ConfigDef.ConfigKey configKey;
+    }
+
     private void generate() throws IOException {
-        final String builderMethods = this.builderGeneratorInput.getConfigDef().configKeys()
-                .values()
+        final String builderMethods = this.builderGeneratorInput.getConfigDefs()
+                .entrySet()
                 .stream()
-                .sorted(comparing(configKey -> configKey.name))
+                .flatMap(entry -> entry.getValue()
+                        .configKeys()
+                        .values()
+                        .stream()
+                        .map(configKey -> ConfigNameDef.of(entry.getKey(), configKey))
+                )
+                .sorted(
+                        comparing(ConfigNameDef::getNamespace)
+                                .thenComparing(configKey -> configKey.getConfigKey().name)
+                )
                 .map(this::createBuilderMethod)
                 .collect(joining(""));
 
@@ -157,7 +210,8 @@ public class BuilderGeneratorMain {
                 .filter(field -> field.getType() == String.class);
     }
 
-    private String createBuilderMethod(ConfigDef.ConfigKey configKey) {
+    private String createBuilderMethod(ConfigNameDef configNameDef) {
+        final ConfigDef.ConfigKey configKey = configNameDef.getConfigKey();
         final String configName = configKey.name;
         final String methodName = toMethodName(configName);
         final String variableName = decapitalize(methodName);
@@ -174,8 +228,10 @@ public class BuilderGeneratorMain {
         }
 
         final String builderClassName = this.builderGeneratorInput.getBuilderClassName();
+        final String namespace = configNameDef.getNamespace();
         return javaDoc
-                + String.format("    public %s %s(%s %s) {%n", builderClassName, methodName, type, variableName)
+                + String
+                .format("    public %s %s%s(%s %s) {%n", builderClassName, namespace, methodName, type, variableName)
                 + String.format("        return config(%s, %s);%n", constantName, variableName)
                 + "    }\n\n";
     }
@@ -275,7 +331,7 @@ public class BuilderGeneratorMain {
     static class BuilderGeneratorInput {
         String builderClassName;
         List<Class<?>> constantsClasses;
-        ConfigDef configDef;
+        Map<String, ConfigDef> configDefs;
         String builderFileName;
 
         void generate() throws IOException {
