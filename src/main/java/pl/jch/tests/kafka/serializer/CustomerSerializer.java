@@ -2,7 +2,6 @@ package pl.jch.tests.kafka.serializer;
 
 import java.nio.ByteBuffer;
 import java.util.Map;
-import java.util.Objects;
 
 import org.apache.commons.lang3.SerializationException;
 import org.apache.kafka.common.serialization.Serializer;

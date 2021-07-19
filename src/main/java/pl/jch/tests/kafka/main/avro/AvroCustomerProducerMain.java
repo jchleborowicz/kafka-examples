@@ -38,6 +38,6 @@ public class AvroCustomerProducerMain {
         final ProducerRecord<String, GenericRecord> record =
                 new ProducerRecord<>(TOPIC, "Brajan", genericRecord);
         producer.send(record)
-            .get();
+                .get();
     }
 }

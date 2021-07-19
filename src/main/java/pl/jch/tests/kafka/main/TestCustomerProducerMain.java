@@ -5,8 +5,8 @@ import java.util.concurrent.ExecutionException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import pl.jch.tests.kafka.serializer.CustomerSerializer;
 import pl.jch.tests.kafka.model.Customer;
+import pl.jch.tests.kafka.serializer.CustomerSerializer;
 import pl.jch.tests.kafka.utils.ProducerBuilder;
 import pl.jch.tests.kafka.utils.Topics;
 

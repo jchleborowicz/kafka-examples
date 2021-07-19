@@ -624,8 +624,10 @@ public class ProducerBuilder {
     /**
      * The endpoint identification algorithm to validate server hostname using server certificate.
      */
-    public ProducerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(String schemaRegistrySslEndpointIdentificationAlgorithm) {
-        return config("schema.registry.ssl.endpoint.identification.algorithm", schemaRegistrySslEndpointIdentificationAlgorithm);
+    public ProducerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(
+            String schemaRegistrySslEndpointIdentificationAlgorithm) {
+        return config("schema.registry.ssl.endpoint.identification.algorithm",
+                schemaRegistrySslEndpointIdentificationAlgorithm);
     }
 
     /**
@@ -717,7 +719,8 @@ public class ProducerBuilder {
     /**
      * The SecureRandom PRNG implementation to use for SSL cryptography operations.
      */
-    public ProducerBuilder schemaRegistrySslSecureRandomImplementation(String schemaRegistrySslSecureRandomImplementation) {
+    public ProducerBuilder schemaRegistrySslSecureRandomImplementation(
+            String schemaRegistrySslSecureRandomImplementation) {
         return config("schema.registry.ssl.secure.random.implementation", schemaRegistrySslSecureRandomImplementation);
     }
 
