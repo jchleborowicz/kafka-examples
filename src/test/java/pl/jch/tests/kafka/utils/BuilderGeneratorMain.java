@@ -66,8 +66,7 @@ public class BuilderGeneratorMain {
             "CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG",
             "CommonClientConfigs.DEFAULT_API_TIMEOUT_MS_CONFIG",
             "AbstractKafkaSchemaSerDeConfig.KEY_SUBJECT_NAME_STRATEGY_DEFAULT",
-            "AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY_DEFAULT",
-            "AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG");
+            "AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY_DEFAULT");
 
     private static final Set<String> IGNORED_CONSTANT_VALUES = Set.of("JKS");
 
