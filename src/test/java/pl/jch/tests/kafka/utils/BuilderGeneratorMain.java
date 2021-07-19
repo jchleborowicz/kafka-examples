@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.stream.Stream;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Value;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -22,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 
+import static java.util.Arrays.asList;
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
@@ -29,7 +31,7 @@ import static java.util.stream.Collectors.toMap;
 /**
  * Class generates ConsumerBuilder and ProducerBuilder.
  */
-public class BuilderGenerator {
+public class BuilderGeneratorMain {
 
     private static final Set<String> IGNORED_CONSTANTS = Set.of(
             "SaslConfigs.DEFAULT_SASL_MECHANISM",
@@ -75,8 +77,6 @@ public class BuilderGenerator {
             "internal.throw.on.fetch.stable.offset.unsupported"
     );
 
-    private final Map<String, String> constantNameByProperty;
-    private final String builderClassName;
     public static final Map<ConfigDef.Type, String> TYPE_BY_CONFIG_TYPE = Map.of(
             ConfigDef.Type.BOOLEAN, "boolean",
             ConfigDef.Type.CLASS, "Class<?>",
@@ -89,32 +89,44 @@ public class BuilderGenerator {
             ConfigDef.Type.STRING, "String"
     );
 
-    public BuilderGenerator(String builderClassName, Class<?>... configClasses) {
-        this.builderClassName = builderClassName;
+    private final BuilderGeneratorInput builderGeneratorInput;
+    private final Map<String, String> constantNameByProperty;
+
+    public BuilderGeneratorMain(BuilderGeneratorInput builderGeneratorInput) {
+        this.builderGeneratorInput = builderGeneratorInput;
         this.constantNameByProperty =
-                staticFieldsStream(configClasses)
-                        .filter(f -> Modifier.isPublic(f.getModifiers()))
+                staticFieldsStream(builderGeneratorInput.getConstantsClasses())
+                        .filter(field -> Modifier.isPublic(field.getModifiers()))
                         .map(field -> ConstantDef.of(getValue(field),
                                 field.getDeclaringClass().getSimpleName() + "." + field.getName()))
-                        .filter(s -> !s.getConfigName().contains(" "))
-                        .filter(s -> !IGNORED_CONSTANTS.contains(s.getConstantName()))
-                        .filter(s -> !IGNORED_CONSTANT_VALUES.contains(s.getConfigName()))
+                        .filter(constantDef -> !constantDef.getConfigName().contains(" "))
+                        .filter(constantDef -> !IGNORED_CONSTANTS.contains(constantDef.getConstantName()))
+                        .filter(constantDef -> !IGNORED_CONSTANT_VALUES.contains(constantDef.getConfigName()))
                         .collect(toMap(ConstantDef::getConfigName, ConstantDef::getConstantName));
     }
 
     public static void main(String[] args) throws IOException {
-        new BuilderGenerator("ProducerBuilder", ProducerConfig.class, SaslConfigs.class, CommonClientConfigs.class,
-                SslConfigs.class)
-                .generateBuilder(ProducerConfig.configDef(),
-                        "src/main/java/pl/jch/tests/kafka/utils/ProducerBuilder.java");
-        new BuilderGenerator("ConsumerBuilder", ConsumerConfig.class, SaslConfigs.class, SslConfigs.class,
-                CommonClientConfigs.class)
-                .generateBuilder(ConsumerConfig.configDef(),
-                        "src/main/java/pl/jch/tests/kafka/utils/ConsumerBuilder.java");
+        BuilderGeneratorInput.builder()
+                .configDef(ProducerConfig.configDef())
+                .builderClassName("ProducerBuilder")
+                .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ProducerBuilder.java")
+                .constantsClasses(
+                        asList(ProducerConfig.class, SaslConfigs.class, CommonClientConfigs.class, SslConfigs.class))
+                .build()
+                .generate();
+
+        BuilderGeneratorInput.builder()
+                .configDef(ConsumerConfig.configDef())
+                .builderClassName("ConsumerBuilder")
+                .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ConsumerBuilder.java")
+                .constantsClasses(
+                        asList(ConsumerConfig.class, SaslConfigs.class, SslConfigs.class, CommonClientConfigs.class))
+                .build()
+                .generate();
     }
 
-    private void generateBuilder(ConfigDef configDef, String builderFileName) throws IOException {
-        final String builderMethods = configDef.configKeys()
+    private void generate() throws IOException {
+        final String builderMethods = this.builderGeneratorInput.getConfigDef().configKeys()
                 .values()
                 .stream()
                 .sorted(comparing(configKey -> configKey.name))
@@ -126,7 +138,7 @@ public class BuilderGenerator {
                 + builderMethods +
                 "    // ### AUTOGENERATED BUILDER METHODS END ###\n";
 
-        final Path path = Path.of(builderFileName);
+        final Path path = Path.of(this.builderGeneratorInput.getBuilderFileName());
         final String content = Files.readString(path);
         final String newContent = content.replaceAll(
                 " {4}// ### AUTOGENERATED BUILDER METHODS START ###(.*\\n)* {4}// ### AUTOGENERATED BUILDER METHODS END ###\\n",
@@ -134,12 +146,12 @@ public class BuilderGenerator {
 
         Files.writeString(path, newContent);
 
-        System.out.printf("%s done.%n", this.builderClassName);
+        System.out.printf("%s done.%n", this.builderGeneratorInput.getBuilderClassName());
     }
 
-    private static Stream<Field> staticFieldsStream(Class<?>... classes) {
-        return Arrays.stream(classes)
-                .flatMap(c -> Arrays.stream(c.getDeclaredFields()))
+    private static Stream<Field> staticFieldsStream(List<Class<?>> classes) {
+        return classes.stream()
+                .flatMap(constantsClass -> Arrays.stream(constantsClass.getDeclaredFields()))
                 .filter(field -> Modifier.isStatic(field.getModifiers()))
                 .filter(field -> Modifier.isFinal(field.getModifiers()))
                 .filter(field -> field.getType() == String.class);
@@ -156,14 +168,14 @@ public class BuilderGenerator {
 
         String javaDoc = "";
         if (StringUtils.isNotEmpty(configKey.documentation)) {
-            javaDoc = "    /**\n     * "
-                    + String.join("\n     * ",
-                    splitLines(configKey.documentation, 100))
-                    + "\n     */\n";
+            final List<String> lines = splitLines(configKey.documentation, 100);
+            javaDoc = String.format("    /**\n     * %s\n     */\n",
+                    String.join("\n     * ", lines));
         }
 
+        final String builderClassName = this.builderGeneratorInput.getBuilderClassName();
         return javaDoc
-                + String.format("    public %s %s(%s %s) {%n", this.builderClassName, methodName, type, variableName)
+                + String.format("    public %s %s(%s %s) {%n", builderClassName, methodName, type, variableName)
                 + String.format("        return config(%s, %s);%n", constantName, variableName)
                 + "    }\n\n";
     }
@@ -195,7 +207,7 @@ public class BuilderGenerator {
         return Arrays.stream(text.split("\\."))
                 .map(String::trim)
                 .filter(s -> s.length() > 0)
-                .map(BuilderGenerator::capitalize)
+                .map(BuilderGeneratorMain::capitalize)
                 .collect(joining(""));
     }
 
@@ -237,7 +249,7 @@ public class BuilderGenerator {
 
     static String toMethodName(String propertyName) {
         final String result = Arrays.stream(propertyName.split("\\."))
-                .map(BuilderGenerator::capitalize)
+                .map(BuilderGeneratorMain::capitalize)
                 .collect(joining(""));
         return decapitalize(result);
     }
@@ -255,6 +267,20 @@ public class BuilderGenerator {
             return (String) field.get(null);
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    @Value
+    @Builder
+    static class BuilderGeneratorInput {
+        String builderClassName;
+        List<Class<?>> constantsClasses;
+        ConfigDef configDef;
+        String builderFileName;
+
+        void generate() throws IOException {
+            new BuilderGeneratorMain(this)
+                    .generate();
         }
     }
 
