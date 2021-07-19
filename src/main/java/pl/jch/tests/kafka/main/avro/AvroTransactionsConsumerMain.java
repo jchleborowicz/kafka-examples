@@ -21,7 +21,7 @@ public class AvroTransactionsConsumerMain {
     public static void main(final String[] args) {
         ConsumerBuilder.builder(StringDeserializer.class, KafkaAvroDeserializer.class)
                 .groupId("test-payments")
-                .config(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, true)
+                .specificAvroReader(true)
                 .execute(AvroTransactionsConsumerMain::execute);
     }
 
