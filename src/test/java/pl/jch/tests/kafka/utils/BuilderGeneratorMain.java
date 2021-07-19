@@ -7,14 +7,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
 import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -23,7 +22,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
@@ -133,10 +131,8 @@ public class BuilderGeneratorMain {
     }
 
     public static void main(String[] args) throws IOException, NoSuchFieldException, IllegalAccessException {
-        final ConfigDef avroConfig = getAvroProducerConfigDef();
-
         BuilderGeneratorInput.builder()
-                .configDefs(Map.of("", ProducerConfig.configDef(), "avroSerializer", avroConfig))
+                .configDefs(asList(ProducerConfig.configDef(), getAvroSerializerConfigDef()))
                 .builderClassName("ProducerBuilder")
                 .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ProducerBuilder.java")
                 .constantsClasses(
@@ -146,17 +142,24 @@ public class BuilderGeneratorMain {
                 .generate();
 
         BuilderGeneratorInput.builder()
-                .configDefs(Map.of("", ConsumerConfig.configDef()))
+                .configDefs(asList(ConsumerConfig.configDef(), getAvroDeserializerConfigDef()))
                 .builderClassName("ConsumerBuilder")
                 .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ConsumerBuilder.java")
                 .constantsClasses(
-                        asList(ConsumerConfig.class, SaslConfigs.class, SslConfigs.class, CommonClientConfigs.class))
+                        asList(ConsumerConfig.class, SaslConfigs.class, SslConfigs.class, CommonClientConfigs.class,
+                                KafkaAvroDeserializerConfig.class, AbstractKafkaSchemaSerDeConfig.class))
                 .build()
                 .generate();
     }
 
-    private static ConfigDef getAvroProducerConfigDef() throws NoSuchFieldException, IllegalAccessException {
+    private static ConfigDef getAvroSerializerConfigDef() throws NoSuchFieldException, IllegalAccessException {
         final Field config = KafkaAvroSerializerConfig.class.getDeclaredField("config");
+        config.setAccessible(true);
+        return (ConfigDef) config.get(null);
+    }
+
+    private static ConfigDef getAvroDeserializerConfigDef() throws NoSuchFieldException, IllegalAccessException {
+        final Field config = KafkaAvroDeserializerConfig.class.getDeclaredField("config");
         config.setAccessible(true);
         return (ConfigDef) config.get(null);
     }
@@ -170,18 +173,13 @@ public class BuilderGeneratorMain {
 
     private void generate() throws IOException {
         final String builderMethods = this.builderGeneratorInput.getConfigDefs()
-                .entrySet()
                 .stream()
-                .flatMap(entry -> entry.getValue()
+                .flatMap(configDef -> configDef
                         .configKeys()
                         .values()
                         .stream()
-                        .map(configKey -> ConfigNameDef.of(entry.getKey(), configKey))
                 )
-                .sorted(
-                        comparing(ConfigNameDef::getNamespace)
-                                .thenComparing(configKey -> configKey.getConfigKey().name)
-                )
+                .sorted(comparing(configKey -> configKey.name))
                 .map(this::createBuilderMethod)
                 .collect(joining(""));
 
@@ -209,8 +207,7 @@ public class BuilderGeneratorMain {
                 .filter(field -> field.getType() == String.class);
     }
 
-    private String createBuilderMethod(ConfigNameDef configNameDef) {
-        final ConfigDef.ConfigKey configKey = configNameDef.getConfigKey();
+    private String createBuilderMethod(ConfigDef.ConfigKey configKey) {
         final String configName = configKey.name;
         final String methodName = toMethodName(configName);
         final String variableName = decapitalize(methodName);
@@ -227,10 +224,9 @@ public class BuilderGeneratorMain {
         }
 
         final String builderClassName = this.builderGeneratorInput.getBuilderClassName();
-        final String namespace = configNameDef.getNamespace();
         return javaDoc
                 + String
-                .format("    public %s %s%s(%s %s) {%n", builderClassName, namespace, methodName, type, variableName)
+                .format("    public %s %s(%s %s) {%n", builderClassName, methodName, type, variableName)
                 + String.format("        return config(%s, %s);%n", constantName, variableName)
                 + "    }\n\n";
     }
@@ -330,7 +326,7 @@ public class BuilderGeneratorMain {
     static class BuilderGeneratorInput {
         String builderClassName;
         List<Class<?>> constantsClasses;
-        Map<String, ConfigDef> configDefs;
+        List<ConfigDef> configDefs;
         String builderFileName;
 
         void generate() throws IOException {
