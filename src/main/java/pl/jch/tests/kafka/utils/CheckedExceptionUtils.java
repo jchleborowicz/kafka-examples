@@ -2,13 +2,13 @@ package pl.jch.tests.kafka.utils;
 
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
 public class CheckedExceptionUtils {
-    private static <T, S> Function<T, S> withoutCheckedException(
-            FunctionWithCheckedException<T, S> function) {
+    public static <T, S> Function<T, S> wrapCheckedFunction(CheckedFunction<T, S> function) {
         return param -> {
             try {
                 return function.apply(param);
@@ -20,8 +20,7 @@ public class CheckedExceptionUtils {
         };
     }
 
-    public static <T> Consumer<T> withoutCheckedException(
-            ConsumerWithCheckedException<T> consumer) {
+    public static <T> Consumer<T> wrapCheckedConsumer(CheckedConsumer<T> consumer) {
         return param -> {
             try {
                 consumer.accept(param);
@@ -33,13 +32,17 @@ public class CheckedExceptionUtils {
         };
     }
 
-    @FunctionalInterface
-    public interface FunctionWithCheckedException<T, S> {
-        S apply(T var1) throws Exception;
+    public static <T> Supplier<T> wrapCheckedSupplier(CheckedSupplier<T> supplier) {
+        return () -> {
+            try {
+                return supplier.get();
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
     }
 
-    @FunctionalInterface
-    public interface ConsumerWithCheckedException<T> {
-        void accept(T var1) throws Exception;
-    }
+
 }

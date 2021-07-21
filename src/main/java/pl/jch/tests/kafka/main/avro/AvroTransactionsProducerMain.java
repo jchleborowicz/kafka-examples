@@ -1,5 +1,6 @@
 package pl.jch.tests.kafka.main.avro;
 
+import java.util.concurrent.Future;
 import java.util.stream.IntStream;
 
 import io.confluent.examples.clients.basicavro.Payment;
@@ -7,10 +8,9 @@ import io.confluent.kafka.serializers.KafkaAvroSerializer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import pl.jch.tests.kafka.utils.CheckedExceptionUtils;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.withoutCheckedException;
+import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedFunction;
 import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
 
 public class AvroTransactionsProducerMain {
@@ -27,8 +27,9 @@ public class AvroTransactionsProducerMain {
                 .mapToObj(i -> "id" + i)
                 .map(orderId -> new Payment(orderId, 1000.00d))
                 .map(payment -> new ProducerRecord<>(TOPIC, payment.getId().toString(), payment))
-                .peek(withoutCheckedException(ignored -> Thread.sleep(1)))
-                .forEach(producer::send);
+                .map(producer::send)
+                .map(wrapCheckedFunction(Future::get))
+                .forEach(System.out::println);
 
         producer.flush();
         System.out.printf("Successfully produced 10 messages to a topic called %s%n", TOPIC);

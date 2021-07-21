@@ -30,6 +30,7 @@ import static java.util.Arrays.asList;
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
+import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedSupplier;
 
 /**
  * Class generates ConsumerBuilder and ProducerBuilder.
@@ -314,11 +315,8 @@ public class BuilderGeneratorMain {
     }
 
     private static String getValue(Field field) {
-        try {
-            return (String) field.get(null);
-        } catch (IllegalAccessException e) {
-            throw new RuntimeException(e);
-        }
+        return wrapCheckedSupplier(() -> (String) field.get(null))
+                .get();
     }
 
     @Value

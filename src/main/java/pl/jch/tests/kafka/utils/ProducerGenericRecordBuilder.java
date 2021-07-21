@@ -1,7 +1,7 @@
 package pl.jch.tests.kafka.utils;
 
-import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
@@ -10,6 +10,8 @@ import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+
+import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedFunction;
 
 public class ProducerGenericRecordBuilder<KeyT> {
 
@@ -50,11 +52,8 @@ public class ProducerGenericRecordBuilder<KeyT> {
     }
 
     private static String readFile(String fileName) {
-        try {
-            return Files.readString(Paths.get(fileName));
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        return wrapCheckedFunction((CheckedFunction<Path, String>) Files::readString)
+                .apply(Paths.get(fileName));
     }
 
     public ProducerRecord<KeyT, GenericRecord> build() {

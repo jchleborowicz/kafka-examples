@@ -624,8 +624,10 @@ public class ProducerBuilder {
     /**
      * The endpoint identification algorithm to validate server hostname using server certificate.
      */
-    public ProducerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(String schemaRegistrySslEndpointIdentificationAlgorithm) {
-        return config("schema.registry.ssl.endpoint.identification.algorithm", schemaRegistrySslEndpointIdentificationAlgorithm);
+    public ProducerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(
+            String schemaRegistrySslEndpointIdentificationAlgorithm) {
+        return config("schema.registry.ssl.endpoint.identification.algorithm",
+                schemaRegistrySslEndpointIdentificationAlgorithm);
     }
 
     /**
@@ -717,7 +719,8 @@ public class ProducerBuilder {
     /**
      * The SecureRandom PRNG implementation to use for SSL cryptography operations.
      */
-    public ProducerBuilder schemaRegistrySslSecureRandomImplementation(String schemaRegistrySslSecureRandomImplementation) {
+    public ProducerBuilder schemaRegistrySslSecureRandomImplementation(
+            String schemaRegistrySslSecureRandomImplementation) {
         return config("schema.registry.ssl.secure.random.implementation", schemaRegistrySslSecureRandomImplementation);
     }
 
@@ -1027,14 +1030,12 @@ public class ProducerBuilder {
 
     public <KeyT, ValueT, ResultT> ResultT execute(ProducerCallback<KeyT, ValueT, ResultT> callback) {
         try (final Producer<KeyT, ValueT> producer = this.build()) {
-            final ResultT result = callback.execute(producer);
+            final ResultT result = CheckedExceptionUtils.wrapCheckedFunction(callback::execute)
+                    .apply(producer);
+
             producer.flush();
+
             return result;
-        } catch (Exception e) {
-            if (e instanceof RuntimeException) {
-                throw (RuntimeException) e;
-            }
-            throw new RuntimeException(e);
         }
     }
 
