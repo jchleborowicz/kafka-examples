@@ -92,8 +92,7 @@ public class ConsumerBuilder {
      * If true, use logical type converter in generic record
      */
     public ConsumerBuilder avroUseLogicalTypeConverters(boolean avroUseLogicalTypeConverters) {
-        return config(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
-                avroUseLogicalTypeConverters);
+        return config(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, avroUseLogicalTypeConverters);
     }
 
     /**
@@ -286,8 +285,7 @@ public class ConsumerBuilder {
         return config("internal.leave.group.on.close", internalLeaveGroupOnClose);
     }
 
-    public ConsumerBuilder internalThrowOnFetchStableOffsetUnsupported(
-            boolean internalThrowOnFetchStableOffsetUnsupported) {
+    public ConsumerBuilder internalThrowOnFetchStableOffsetUnsupported(boolean internalThrowOnFetchStableOffsetUnsupported) {
         return config("internal.throw.on.fetch.stable.offset.unsupported", internalThrowOnFetchStableOffsetUnsupported);
     }
 
@@ -654,10 +652,8 @@ public class ConsumerBuilder {
     /**
      * The endpoint identification algorithm to validate server hostname using server certificate.
      */
-    public ConsumerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(
-            String schemaRegistrySslEndpointIdentificationAlgorithm) {
-        return config("schema.registry.ssl.endpoint.identification.algorithm",
-                schemaRegistrySslEndpointIdentificationAlgorithm);
+    public ConsumerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(String schemaRegistrySslEndpointIdentificationAlgorithm) {
+        return config("schema.registry.ssl.endpoint.identification.algorithm", schemaRegistrySslEndpointIdentificationAlgorithm);
     }
 
     /**
@@ -749,8 +745,7 @@ public class ConsumerBuilder {
     /**
      * The SecureRandom PRNG implementation to use for SSL cryptography operations.
      */
-    public ConsumerBuilder schemaRegistrySslSecureRandomImplementation(
-            String schemaRegistrySslSecureRandomImplementation) {
+    public ConsumerBuilder schemaRegistrySslSecureRandomImplementation(String schemaRegistrySslSecureRandomImplementation) {
         return config("schema.registry.ssl.secure.random.implementation", schemaRegistrySslSecureRandomImplementation);
     }
 
@@ -1074,23 +1069,6 @@ public class ConsumerBuilder {
     public ConsumerBuilder config(String configName, Object value) {
         this.properties.put(configName, value);
         return this;
-    }
-
-    public enum AutoOffsetReset implements IdentifiableEnum<String> {
-        LATEST("latest"),
-        EARLIEST("earliest"),
-        NONE("none");
-
-        private final String id;
-
-        AutoOffsetReset(String id) {
-            this.id = id;
-        }
-
-        @Override
-        public String getId() {
-            return id;
-        }
     }
 
 }
