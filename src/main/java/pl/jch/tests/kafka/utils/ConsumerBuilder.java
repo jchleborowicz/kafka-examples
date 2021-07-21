@@ -44,7 +44,7 @@ public class ConsumerBuilder {
                 .valueDeserializer(valueDeserializer);
     }
 
-    public <T, S> PollingConsumerCallbackBuilder<T, S> consumerDefinition() {
+    public <T, S> PollingConsumerCallbackBuilder<T, S> defineIncomingRecordsHandler() {
         return PollingConsumerCallbackBuilder.builder(this::execute);
     }
 

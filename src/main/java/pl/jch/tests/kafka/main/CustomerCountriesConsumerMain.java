@@ -18,7 +18,7 @@ public class CustomerCountriesConsumerMain {
     public static void main(String[] args) {
         consumerBuilder()
                 .groupId("counter")
-                .consumerDefinition()
+                .defineIncomingRecordsHandler()
                 .topic(TOPIC)
                 .pollDuration(Duration.ofSeconds(5))
                 .onRecord(CustomerCountriesConsumerMain.recordHandler())
