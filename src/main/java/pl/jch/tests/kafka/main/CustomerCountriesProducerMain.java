@@ -18,11 +18,11 @@ public class CustomerCountriesProducerMain {
         producerBuilder()
                 .defineOutgoingRecordsProducer()
                 .topic(TOPIC)
-                .keyValuesSupplier(CustomerCountriesProducerMain::records)
+                .keyValuesSupplier(CustomerCountriesProducerMain::createKeyValue)
                 .sendRecords();
     }
 
-    private static Optional<KeyValue<String, String>> records() {
+    private static Optional<KeyValue<String, String>> createKeyValue() {
         return Stream.generate(StdIn::readLine)
                 .map(CustomerCountriesProducerMain::parseKeyValue)
                 .filter(Objects::nonNull)
