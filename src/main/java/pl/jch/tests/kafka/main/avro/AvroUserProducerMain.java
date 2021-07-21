@@ -8,21 +8,20 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
-import pl.jch.tests.kafka.utils.ProducerBuilder;
 import pl.jch.tests.kafka.utils.Topics;
+
+import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
 
 public class AvroUserProducerMain {
 
     public static final String TOPIC = Topics.USERS;
 
     public static void main(String[] args) {
-        System.out.println(
-                ProducerBuilder.builder(StringSerializer.class, KafkaAvroSerializer.class)
-                        .execute(AvroUserProducerMain::execute)
-        );
+        producerBuilder(StringSerializer.class, KafkaAvroSerializer.class)
+                .execute(AvroUserProducerMain::execute);
     }
 
-    private static RecordMetadata execute(Producer<CharSequence, User> producer)
+    private static void execute(Producer<CharSequence, User> producer)
             throws ExecutionException, InterruptedException {
         final User user = User.newBuilder()
                 .setName("Jerzy")
@@ -32,6 +31,8 @@ public class AvroUserProducerMain {
 
         final ProducerRecord<CharSequence, User> record = new ProducerRecord<>(TOPIC, user.getName(), user);
 
-        return producer.send(record).get();
+        final RecordMetadata recordMetadata = producer.send(record).get();
+
+        System.out.println(recordMetadata);
     }
 }

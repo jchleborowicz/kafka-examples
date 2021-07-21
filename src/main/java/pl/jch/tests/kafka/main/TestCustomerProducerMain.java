@@ -10,12 +10,14 @@ import pl.jch.tests.kafka.serializer.CustomerSerializer;
 import pl.jch.tests.kafka.utils.ProducerBuilder;
 import pl.jch.tests.kafka.utils.Topics;
 
+import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
+
 public class TestCustomerProducerMain {
 
     public static final String TOPIC = Topics.TEST;
 
     public static void main(String[] args) {
-        ProducerBuilder.builder(StringSerializer.class, CustomerSerializer.class)
+        producerBuilder(StringSerializer.class, CustomerSerializer.class)
                 .execute(TestCustomerProducerMain::execute);
     }
 

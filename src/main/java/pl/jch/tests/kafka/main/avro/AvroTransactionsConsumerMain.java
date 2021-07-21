@@ -8,17 +8,17 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import pl.jch.tests.kafka.utils.ConsumerBuilder;
 import pl.jch.tests.kafka.utils.Topics;
 
 import static java.util.Collections.singletonList;
+import static pl.jch.tests.kafka.utils.KafkaBuilders.consumerBuilder;
 
 public class AvroTransactionsConsumerMain {
 
     private static final String TOPIC = Topics.TRANSACTIONS;
 
     public static void main(final String[] args) {
-        ConsumerBuilder.builder(StringDeserializer.class, KafkaAvroDeserializer.class)
+        consumerBuilder(StringDeserializer.class, KafkaAvroDeserializer.class)
                 .groupId("test-payments")
                 .specificAvroReader(true)
                 .execute(AvroTransactionsConsumerMain::execute);
