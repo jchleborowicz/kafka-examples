@@ -1,28 +1,38 @@
 package pl.jch.tests.kafka.main;
 
+import java.io.Console;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import pl.jch.tests.kafka.utils.ProducerCallbackVoid;
 import pl.jch.tests.kafka.utils.Topics;
 
 import static pl.jch.tests.kafka.utils.KafkaBuilders.consumerBuilder;
+import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
 import static pl.jch.tests.kafka.utils.LoggingUtils.prettyPrint;
 
-public class CustomerCountriesConsumerMain {
+public class CustomerCountriesProducerMain {
 
     private static final String TOPIC = Topics.CUSTOMER_COUNTRIES;
 
+    @SuppressWarnings("InfiniteLoopStatement")
     public static void main(String[] args) {
-        consumerBuilder()
-                .groupId("counter")
-                .consumerDefinition()
-                .topic(TOPIC)
-                .pollDuration(Duration.ofSeconds(5))
-                .onRecord(CustomerCountriesConsumerMain.recordHandler())
-                .pollInfinitely();
+        producerBuilder()
+                .execute((ProducerCallbackVoid<String, String>) producer -> {
+                    while (true) {
+                        final String s = System.console().readLine();
+                        final String[] split = s.split(" ");
+                        if (split.length == 2) {
+                            producer.send(new ProducerRecord<>(TOPIC, split[0], split[1]));
+                        }
+                    }
+
+                });
     }
 
     private static Consumer<ConsumerRecord<String, String>> recordHandler() {
