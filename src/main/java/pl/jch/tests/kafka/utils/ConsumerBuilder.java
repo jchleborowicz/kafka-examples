@@ -71,7 +71,7 @@ public class ConsumerBuilder {
      * consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>
      */
     public ConsumerBuilder autoOffsetReset(AutoOffsetReset autoOffsetReset) {
-        return config(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
+        return config(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset.getId());
     }
 
     /**
