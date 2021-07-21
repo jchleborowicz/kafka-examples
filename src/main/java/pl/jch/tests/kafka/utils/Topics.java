@@ -9,4 +9,6 @@ public class Topics {
     public static final String TRANSACTIONS = "transactions";
     public static final String USERS = "users";
     public static final String TEST = "test";
+    public static final String CUSTOMER_COUNTRIES = "customerCountries";
+
 }

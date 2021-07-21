@@ -31,9 +31,10 @@ public class PollingConsumerCallbackBuilder<KeyT, ValueT> {
         return this;
     }
 
-    public PollingConsumerCallbackBuilder<KeyT, ValueT> onRecord(Consumer<ConsumerRecord<KeyT, ValueT>> recordConsumer) {
-        this.recordConsumer = recordConsumer;
-        return this;
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public <S, T> PollingConsumerCallbackBuilder<S, T> onRecord(Consumer<ConsumerRecord<S, T>> recordConsumer) {
+        this.recordConsumer = (Consumer) recordConsumer;
+        return (PollingConsumerCallbackBuilder) this;
     }
 
     @SuppressWarnings("InfiniteLoopStatement")
