@@ -14,15 +14,16 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import pl.jch.tests.kafka.utils.ProducerBuilder;
 import pl.jch.tests.kafka.utils.Topics;
+
+import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
 
 public class AvroCustomerProducerMain {
 
     public static final String TOPIC = Topics.CUSTOMERS;
 
     public static void main(String[] args) {
-        ProducerBuilder.builder(StringSerializer.class, KafkaAvroSerializer.class)
+        producerBuilder(StringSerializer.class, KafkaAvroSerializer.class)
                 .execute(AvroCustomerProducerMain::execute);
     }
 

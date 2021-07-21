@@ -5,15 +5,16 @@ import java.time.Instant;
 
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import pl.jch.tests.kafka.utils.ProducerBuilder;
 import pl.jch.tests.kafka.utils.Topics;
+
+import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
 
 public class TestProducerMain {
 
     public static final String TOPIC = Topics.TEST;
 
     public static void main(String[] args) {
-        ProducerBuilder.builder()
+        producerBuilder()
                 .execute(TestProducerMain::execute);
     }
 
