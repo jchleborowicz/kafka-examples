@@ -1,5 +1,6 @@
 package pl.jch.tests.kafka.utils;
 
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -44,5 +45,15 @@ public class CheckedExceptionUtils {
         };
     }
 
-
+    public static <T, S> BiConsumer<T, S> wrapCheckedBiConsumer(CheckedBiConsumer<T, S> biConsumer) {
+        return (var1, var2) -> {
+            try {
+                biConsumer.accept(var1, var2);
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        };
+    }
 }
