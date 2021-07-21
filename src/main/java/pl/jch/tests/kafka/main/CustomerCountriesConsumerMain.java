@@ -4,22 +4,17 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import pl.jch.tests.kafka.utils.LoggingUtils;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedFunction;
 import static pl.jch.tests.kafka.utils.KafkaBuilders.consumerBuilder;
+import static pl.jch.tests.kafka.utils.LoggingUtils.prettyPrint;
 
 public class CustomerCountriesConsumerMain {
 
     private static final String TOPIC = Topics.CUSTOMER_COUNTRIES;
-    public static final Function<Object, String> JSON_SERIALIZER =
-            wrapCheckedFunction(
-                    new ObjectMapper().writerWithDefaultPrettyPrinter()::writeValueAsString
-            );
 
     public static void main(String[] args) {
         consumerBuilder()
@@ -46,11 +41,6 @@ public class CustomerCountriesConsumerMain {
 
             prettyPrint(custCountryMap);
         };
-    }
-
-    private static void prettyPrint(Map<String, Integer> custCountryMap) {
-        final String serialized = JSON_SERIALIZER.apply(custCountryMap);
-        System.out.println(serialized);
     }
 
 }
