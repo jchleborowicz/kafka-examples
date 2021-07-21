@@ -1,6 +1,8 @@
 package pl.jch.tests.kafka.main;
 
+import java.io.BufferedReader;
 import java.io.Console;
+import java.io.InputStreamReader;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -25,7 +27,7 @@ public class CustomerCountriesProducerMain {
         producerBuilder()
                 .execute((ProducerCallbackVoid<String, String>) producer -> {
                     while (true) {
-                        final String s = System.console().readLine();
+                        final String s = new BufferedReader(new InputStreamReader(System.in)).readLine();
                         final String[] split = s.split(" ");
                         if (split.length == 2) {
                             producer.send(new ProducerRecord<>(TOPIC, split[0], split[1]));

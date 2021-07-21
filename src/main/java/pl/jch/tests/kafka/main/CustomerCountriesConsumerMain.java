@@ -34,7 +34,7 @@ public class CustomerCountriesConsumerMain {
                     record.topic(), record.partition(), record.offset(), record.key(), country);
 
             synchronized (customerCountByCountry) {
-                final Integer currentCount = customerCountByCountry.getOrDefault(country, 1);
+                final Integer currentCount = customerCountByCountry.getOrDefault(country, 0);
                 customerCountByCountry.put(country, currentCount + 1);
             }
 
