@@ -6,7 +6,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import pl.jch.tests.kafka.utils.LoggingUtils;
 import pl.jch.tests.kafka.utils.Topics;
 
 import static pl.jch.tests.kafka.utils.KafkaBuilders.consumerBuilder;
