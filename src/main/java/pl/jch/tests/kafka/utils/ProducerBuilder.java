@@ -15,6 +15,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils;
+import pl.jch.tests.kafka.utils.kafka.Acks;
 
 @SuppressWarnings("unused")
 public class ProducerBuilder {
@@ -1050,20 +1052,4 @@ public class ProducerBuilder {
         });
     }
 
-   public enum Acks implements IdentifiableEnum<String> {
-        NO_WAIT("0"),
-        ONLY_LEADER("1"),
-        ALL("all");
-
-        private final String id;
-
-        Acks(String id) {
-            this.id = id;
-        }
-
-        @Override
-        public String getId() {
-            return this.id;
-        }
-    }
 }

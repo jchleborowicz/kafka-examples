@@ -1,4 +1,4 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.functions;
 
 @FunctionalInterface
 public interface CheckedSupplier<T> {

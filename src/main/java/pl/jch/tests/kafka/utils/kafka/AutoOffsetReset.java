@@ -1,4 +1,6 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.kafka;
+
+import pl.jch.tests.kafka.utils.IdentifiableEnum;
 
 public enum AutoOffsetReset implements IdentifiableEnum<String> {
     LATEST("latest"),

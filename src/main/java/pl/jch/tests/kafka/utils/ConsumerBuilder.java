@@ -20,6 +20,8 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils;
+import pl.jch.tests.kafka.utils.kafka.AutoOffsetReset;
 
 @SuppressWarnings("unused")
 @NoArgsConstructor(access = AccessLevel.PRIVATE)

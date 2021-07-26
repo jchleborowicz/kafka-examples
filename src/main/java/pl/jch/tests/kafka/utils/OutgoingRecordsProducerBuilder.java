@@ -8,7 +8,7 @@ import java.util.stream.Stream;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
 
-import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedFunction;
+import static pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils.wrapCheckedFunction;
 
 public class OutgoingRecordsProducerBuilder<KeyT, ValueT> {
 

@@ -1,4 +1,4 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.functions;
 
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;

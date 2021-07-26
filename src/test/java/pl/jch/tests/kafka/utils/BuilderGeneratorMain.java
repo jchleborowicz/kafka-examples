@@ -30,7 +30,7 @@ import static java.util.Arrays.asList;
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
-import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedSupplier;
+import static pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils.wrapCheckedSupplier;
 
 /**
  * Class generates ConsumerBuilder and ProducerBuilder.

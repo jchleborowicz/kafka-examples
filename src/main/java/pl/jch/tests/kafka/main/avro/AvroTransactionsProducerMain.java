@@ -10,7 +10,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedFunction;
+import static pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils.wrapCheckedFunction;
 import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
 
 public class AvroTransactionsProducerMain {

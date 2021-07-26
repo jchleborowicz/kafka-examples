@@ -6,7 +6,7 @@ import java.util.function.Function;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.experimental.UtilityClass;
 
-import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedFunction;
+import static pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils.wrapCheckedFunction;
 
 @UtilityClass
 public class LoggingUtils {

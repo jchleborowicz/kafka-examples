@@ -4,7 +4,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.function.Supplier;
 
-import static pl.jch.tests.kafka.utils.CheckedExceptionUtils.wrapCheckedSupplier;
+import static pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils.wrapCheckedSupplier;
 
 public class StdIn {
 
