@@ -62,9 +62,9 @@ public class PollingConsumerCallbackBuilder<KeyT, ValueT> {
                 final ConsumerRecords<KeyT, ValueT> records =
                         consumer.poll(PollingConsumerCallbackBuilder.this.pollDuration);
 
-                for (ConsumerRecord<KeyT, ValueT> record : records) {
-                    PollingConsumerCallbackBuilder.this.recordConsumer.accept(record);
-                }
+                records.forEach(record -> PollingConsumerCallbackBuilder.this.recordConsumer.accept(record));
+
+                consumer.commitSync();
             }
         };
     }
