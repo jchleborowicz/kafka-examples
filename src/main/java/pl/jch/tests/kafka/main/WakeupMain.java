@@ -28,6 +28,9 @@ public class WakeupMain {
         return record -> {
             try {
                 final int number = Integer.parseInt(record.value());
+                while (queue.remainingCapacity() <= 0) {
+                    queue.poll();
+                }
                 queue.add(number);
             } catch (NumberFormatException ignored) {
             }
