@@ -11,7 +11,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import pl.jch.tests.kafka.utils.Topics;
 
 import static java.util.Collections.singletonList;
-import static pl.jch.tests.kafka.utils.KafkaBuilders.consumerBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.consumerBuilder;
 
 public class AvroTransactionsConsumerMain {
 

@@ -10,7 +10,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.producerBuilder;
 
 public class AvroUserProducerMain {
 

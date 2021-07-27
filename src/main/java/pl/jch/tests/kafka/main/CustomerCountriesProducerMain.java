@@ -8,7 +8,7 @@ import pl.jch.tests.kafka.utils.KeyValue;
 import pl.jch.tests.kafka.utils.StdIn;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.producerBuilder;
 
 public class CustomerCountriesProducerMain {
 

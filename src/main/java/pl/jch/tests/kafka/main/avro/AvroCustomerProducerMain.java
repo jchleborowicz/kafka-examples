@@ -7,10 +7,10 @@ import org.apache.avro.generic.GenericRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringSerializer;
-import pl.jch.tests.kafka.utils.ProducerGenericRecordBuilder;
 import pl.jch.tests.kafka.utils.Topics;
+import pl.jch.tests.kafka.utils.builders.ProducerGenericRecordBuilder;
 
-import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.producerBuilder;
 
 public class AvroCustomerProducerMain {
 

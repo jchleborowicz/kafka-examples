@@ -8,8 +8,8 @@ import java.util.function.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.KafkaBuilders.consumerBuilder;
 import static pl.jch.tests.kafka.utils.LoggingUtils.prettyPrint;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.consumerBuilder;
 
 public class CustomerCountriesConsumerMain {
 

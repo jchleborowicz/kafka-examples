@@ -1,4 +1,4 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.builders;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

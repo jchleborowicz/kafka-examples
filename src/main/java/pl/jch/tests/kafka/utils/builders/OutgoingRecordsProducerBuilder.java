@@ -1,4 +1,4 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.builders;
 
 import java.util.Optional;
 import java.util.concurrent.Future;
@@ -7,6 +7,8 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
+import pl.jch.tests.kafka.utils.KeyValue;
+import pl.jch.tests.kafka.utils.StreamUtils;
 
 import static pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils.wrapCheckedFunction;
 

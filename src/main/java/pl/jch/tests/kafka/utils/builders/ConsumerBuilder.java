@@ -1,147 +1,180 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.builders;
+
 
 import java.util.HashMap;
 import java.util.Map;
 
 import io.confluent.kafka.serializers.AbstractKafkaSchemaSerDeConfig;
-import io.confluent.kafka.serializers.KafkaAvroSerializerConfig;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializerConfig;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.producer.KafkaProducer;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils;
-import pl.jch.tests.kafka.utils.kafka.Acks;
+import pl.jch.tests.kafka.utils.kafka.AutoOffsetReset;
 
 @SuppressWarnings("unused")
-public class ProducerBuilder {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public class ConsumerBuilder {
 
-    public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
-    public static final String DEFAULT_SCHEMA_REFISTRY_URL = "http://localhost:8081";
-    final Map<String, Object> config = new HashMap<>();
+    private final Map<String, Object> properties = new HashMap<>();
 
-    public static ProducerBuilder builder() {
-        return new ProducerBuilder()
-                .bootstrapServers(DEFAULT_BOOTSTRAP_SERVERS)
-                .schemaRegistryUrl(DEFAULT_SCHEMA_REFISTRY_URL)
-                .acks(Acks.ALL)
-                .keySerializer(StringSerializer.class)
-                .valueSerializer(StringSerializer.class)
-                .retries(0);
+    public static ConsumerBuilder builder() {
+        return new ConsumerBuilder()
+                .bootstrapServers("localhost:9092")
+                .schemaRegistryUrl("http://localhost:8081")
+                .keyDeserializer(StringDeserializer.class)
+                .valueDeserializer(StringDeserializer.class)
+                .enableAutoCommit(true)
+                .autoCommitIntervalMs(1_000);
     }
 
-    public static ProducerBuilder builder(Class<? extends Serializer<?>> keySerializerClass,
-                                          Class<? extends Serializer<?>> valueSerializerClass) {
+    public static ConsumerBuilder builder(Class<StringDeserializer> keyDeserializer,
+                                          Class<KafkaAvroDeserializer> valueDeserializer) {
         return builder()
-                .keySerializer(keySerializerClass)
-                .valueSerializer(valueSerializerClass);
+                .keyDeserializer(keyDeserializer)
+                .valueDeserializer(valueDeserializer);
     }
 
-    private ProducerBuilder config(String configName, Object configValue) {
-        this.config.put(configName, configValue);
+    public <T, S> PollingConsumerCallbackBuilder<T, S> defineIncomingRecordsHandler() {
+        return PollingConsumerCallbackBuilder.builder(this::execute);
+    }
+
+    public <T, S, U> U execute(ConsumerCallback<T, S, U> callback) {
+        try (final Consumer<T, S> consumer = this.build()) {
+            return CheckedExceptionUtils.wrapCheckedFunction(callback::execute)
+                    .apply(consumer);
+        }
+    }
+
+    public <KeyT, ValueT> void execute(ConsumerCallbackVoid<KeyT, ValueT> callback) {
+        this.execute((Consumer<KeyT, ValueT> consumer) -> {
+            addWakeupHook(consumer);
+
+            try {
+                callback.execute(consumer);
+            } catch (WakeupException ignored) {
+                // ignoring wakeup exception
+            }
+            return null;
+        });
+    }
+
+    private static <T, S> void addWakeupHook(Consumer<T, S> consumer) {
+        final Thread mainThread = Thread.currentThread();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("Starting exit...");
+            consumer.wakeup();
+            try {
+                mainThread.join();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }));
+    }
+
+    private <T, S> Consumer<T, S> build() {
+        return new KafkaConsumer<>(this.properties);
+    }
+
+    public ConsumerBuilder config(String configName, Object value) {
+        this.properties.put(configName, value);
         return this;
     }
 
-    public <KeyT, ValueT> OutgoingRecordsProducerBuilder<KeyT, ValueT> defineOutgoingRecordsProducer() {
-        return OutgoingRecordsProducerBuilder.builder(this::execute);
-    }
 
     // ### AUTOGENERATED BUILDER METHODS START ###
     // DO NOT EDIT MANUALLY
 
     /**
-     * The number of acknowledgments the producer requires the leader to have received before considering a
-     * request complete. This controls the  durability of records that are sent. The following settings are
-     * allowed:  <ul> <li><code>acks=0</code> If set to zero then the producer will not wait for any
-     * acknowledgment from the server at all. The record will be immediately added to the socket buffer and
-     * considered sent. No guarantee can be made that the server has received the record in this case, and
-     * the <code>retries</code> configuration will not take effect (as the client won't generally know of
-     * any failures). The offset given back for each record will always be set to <code>-1</code>.
-     * <li><code>acks=1</code> This will mean the leader will write the record to its local log but will
-     * respond without awaiting full acknowledgement from all followers. In this case should the leader
-     * fail immediately after acknowledging the record but before the followers have replicated it then the
-     * record will be lost. <li><code>acks=all</code> This means the leader will wait for the full set of
-     * in-sync replicas to acknowledge the record. This guarantees that the record will not be lost as long
-     * as at least one in-sync replica remains alive. This is the strongest available guarantee. This is
-     * equivalent to the acks=-1 setting.</ul>
+     * Allow automatic topic creation on the broker when subscribing to or assigning a topic. A topic being
+     * subscribed to will be automatically created only if the broker allows for it using
+     * `auto.create.topics.enable` broker configuration. This configuration must be set to `false` when
+     * using brokers older than 0.11.0
      */
-    public ProducerBuilder acks(Acks acks) {
-        return config(ProducerConfig.ACKS_CONFIG, acks.getId());
+    public ConsumerBuilder allowAutoCreateTopics(boolean allowAutoCreateTopics) {
+        return config(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, allowAutoCreateTopics);
+    }
+
+    /**
+     * The frequency in milliseconds that the consumer offsets are auto-committed to Kafka if
+     * <code>enable.auto.commit</code> is set to <code>true</code>.
+     */
+    public ConsumerBuilder autoCommitIntervalMs(int autoCommitIntervalMs) {
+        return config(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, autoCommitIntervalMs);
+    }
+
+    /**
+     * What to do when there is no initial offset in Kafka or if the current offset does not exist any more
+     * on the server (e.g. because that data has been deleted): <ul><li>earliest: automatically reset the
+     * offset to the earliest offset<li>latest: automatically reset the offset to the latest
+     * offset</li><li>none: throw exception to the consumer if no previous offset is found for the
+     * consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>
+     */
+    public ConsumerBuilder autoOffsetReset(AutoOffsetReset autoOffsetReset) {
+        return config(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset.getId());
     }
 
     /**
      * Specify if the Serializer should attempt to register the Schema with Schema Registry
      */
-    public ProducerBuilder autoRegisterSchemas(boolean autoRegisterSchemas) {
+    public ConsumerBuilder autoRegisterSchemas(boolean autoRegisterSchemas) {
         return config(AbstractKafkaSchemaSerDeConfig.AUTO_REGISTER_SCHEMAS, autoRegisterSchemas);
     }
 
     /**
-     * If true, allows null field values used in ReflectionAvroSerializer
+     * If true, allows null field values used in ReflectionAvroDeserializer
      */
-    public ProducerBuilder avroReflectionAllowNull(boolean avroReflectionAllowNull) {
-        return config(KafkaAvroSerializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG, avroReflectionAllowNull);
-    }
-
-    /**
-     * Whether to remove Java-specific properties generated by Avro
-     */
-    public ProducerBuilder avroRemoveJavaProperties(boolean avroRemoveJavaProperties) {
-        return config(KafkaAvroSerializerConfig.AVRO_REMOVE_JAVA_PROPS_CONFIG, avroRemoveJavaProperties);
+    public ConsumerBuilder avroReflectionAllowNull(boolean avroReflectionAllowNull) {
+        return config(KafkaAvroDeserializerConfig.AVRO_REFLECTION_ALLOW_NULL_CONFIG, avroReflectionAllowNull);
     }
 
     /**
      * If true, use logical type converter in generic record
      */
-    public ProducerBuilder avroUseLogicalTypeConverters(boolean avroUseLogicalTypeConverters) {
-        return config(KafkaAvroSerializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, avroUseLogicalTypeConverters);
+    public ConsumerBuilder avroUseLogicalTypeConverters(boolean avroUseLogicalTypeConverters) {
+        return config(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
+                avroUseLogicalTypeConverters);
     }
 
     /**
      * Specify how to pick the credentials for Basic Auth header. The supported values are URL, USER_INFO
      * and SASL_INHERIT
      */
-    public ProducerBuilder basicAuthCredentialsSource(String basicAuthCredentialsSource) {
+    public ConsumerBuilder basicAuthCredentialsSource(String basicAuthCredentialsSource) {
         return config(AbstractKafkaSchemaSerDeConfig.BASIC_AUTH_CREDENTIALS_SOURCE, basicAuthCredentialsSource);
     }
 
     /**
      * Specify the user info for Basic Auth in the form of {username}:{password}
      */
-    public ProducerBuilder basicAuthUserInfo(String basicAuthUserInfo) {
+    public ConsumerBuilder basicAuthUserInfo(String basicAuthUserInfo) {
         return config(AbstractKafkaSchemaSerDeConfig.USER_INFO_CONFIG, basicAuthUserInfo);
-    }
-
-    /**
-     * The producer will attempt to batch records together into fewer requests whenever multiple records
-     * are being sent to the same partition. This helps performance on both the client and the server. This
-     * configuration controls the default batch size in bytes. <p>No attempt will be made to batch records
-     * larger than this size. <p>Requests sent to brokers will contain multiple batches, one for each
-     * partition with data available to be sent. <p>A small batch size will make batching less common and
-     * may reduce throughput (a batch size of zero will disable batching entirely). A very large batch size
-     * may use memory a bit more wastefully as we will always allocate a buffer of the specified batch size
-     * in anticipation of additional records.
-     */
-    public ProducerBuilder batchSize(int batchSize) {
-        return config(ProducerConfig.BATCH_SIZE_CONFIG, batchSize);
     }
 
     /**
      * Specify how to pick the credentials for Bearer Auth header.
      */
-    public ProducerBuilder bearerAuthCredentialsSource(String bearerAuthCredentialsSource) {
+    public ConsumerBuilder bearerAuthCredentialsSource(String bearerAuthCredentialsSource) {
         return config(AbstractKafkaSchemaSerDeConfig.BEARER_AUTH_CREDENTIALS_SOURCE, bearerAuthCredentialsSource);
     }
 
     /**
      * Specify the Bearer token to be used for authentication
      */
-    public ProducerBuilder bearerAuthToken(String bearerAuthToken) {
+    public ConsumerBuilder bearerAuthToken(String bearerAuthToken) {
         return config(AbstractKafkaSchemaSerDeConfig.BEARER_AUTH_TOKEN_CONFIG, bearerAuthToken);
     }
 
@@ -154,20 +187,17 @@ public class ProducerBuilder {
      * change dynamically), this list need not contain the full set of servers (you may want more than one,
      * though, in case a server is down).
      */
-    public ProducerBuilder bootstrapServers(String bootstrapServers) {
-        return config(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+    public ConsumerBuilder bootstrapServers(String bootstrapServers) {
+        return config(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     }
 
     /**
-     * The total bytes of memory the producer can use to buffer records waiting to be sent to the server.
-     * If records are sent faster than they can be delivered to the server the producer will block for
-     * <code>max.block.ms</code> after which it will throw an exception.<p>This setting should correspond
-     * roughly to the total memory the producer will use, but is not a hard bound since not all memory the
-     * producer uses is used for buffering. Some additional memory will be used for compression (if
-     * compression is enabled) as well as for maintaining in-flight requests.
+     * Automatically check the CRC32 of the records consumed. This ensures no on-the-wire or on-disk
+     * corruption to the messages occurred. This check adds some overhead, so it may be disabled in cases
+     * seeking extreme performance.
      */
-    public ProducerBuilder bufferMemory(long bufferMemory) {
-        return config(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferMemory);
+    public ConsumerBuilder checkCrcs(boolean checkCrcs) {
+        return config(ConsumerConfig.CHECK_CRCS_CONFIG, checkCrcs);
     }
 
     /**
@@ -180,8 +210,8 @@ public class ProducerBuilder {
      * If set to <code>default</code> (deprecated), attempt to connect to the first IP address returned by
      * the lookup, even if the lookup returns multiple IP addresses.
      */
-    public ProducerBuilder clientDnsLookup(ClientDnsLookup clientDnsLookup) {
-        return config(ProducerConfig.CLIENT_DNS_LOOKUP_CONFIG, clientDnsLookup);
+    public ConsumerBuilder clientDnsLookup(ClientDnsLookup clientDnsLookup) {
+        return config(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG, clientDnsLookup);
     }
 
     /**
@@ -189,80 +219,161 @@ public class ProducerBuilder {
      * the source of requests beyond just ip/port by allowing a logical application name to be included in
      * server-side request logging.
      */
-    public ProducerBuilder clientId(String clientId) {
-        return config(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+    public ConsumerBuilder clientId(String clientId) {
+        return config(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
     }
 
     /**
-     * The compression type for all data generated by the producer. The default is none (i.e. no
-     * compression). Valid  values are <code>none</code>, <code>gzip</code>, <code>snappy</code>,
-     * <code>lz4</code>, or <code>zstd</code>. Compression is of full batches of data, so the efficacy of
-     * batching will also impact the compression ratio (more batching means better compression).
+     * A rack identifier for this client. This can be any string value which indicates where this client is
+     * physically located. It corresponds with the broker config 'broker.rack'
      */
-    public ProducerBuilder compressionType(String compressionType) {
-        return config(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType);
+    public ConsumerBuilder clientRack(String clientRack) {
+        return config(ConsumerConfig.CLIENT_RACK_CONFIG, clientRack);
     }
 
     /**
      * Close idle connections after the number of milliseconds specified by this config.
      */
-    public ProducerBuilder connectionsMaxIdleMs(long connectionsMaxIdleMs) {
-        return config(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs);
+    public ConsumerBuilder connectionsMaxIdleMs(long connectionsMaxIdleMs) {
+        return config(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG, connectionsMaxIdleMs);
     }
 
     /**
-     * An upper bound on the time to report success or failure after a call to <code>send()</code> returns.
-     * This limits the total time that a record will be delayed prior to sending, the time to await
-     * acknowledgement from the broker (if expected), and the time allowed for retriable send failures. The
-     * producer may report failure to send a record earlier than this config if either an unrecoverable
-     * error is encountered, the retries have been exhausted, or the record is added to a batch which
-     * reached an earlier delivery expiration deadline. The value of this config should be greater than or
-     * equal to the sum of <code>request.timeout.ms</code> and <code>linger.ms</code>.
+     * Specifies the timeout (in milliseconds) for client APIs. This configuration is used as the default
+     * timeout for all client operations that do not specify a <code>timeout</code> parameter.
      */
-    public ProducerBuilder deliveryTimeoutMs(int deliveryTimeoutMs) {
-        return config(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
+    public ConsumerBuilder defaultApiTimeoutMs(int defaultApiTimeoutMs) {
+        return config(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs);
     }
 
     /**
-     * When set to 'true', the producer will ensure that exactly one copy of each message is written in the
-     * stream. If 'false', producer retries due to broker failures, etc., may write duplicates of the
-     * retried message in the stream. Note that enabling idempotence requires
-     * <code>max.in.flight.requests.per.connection</code> to be less than or equal to 5,
-     * <code>retries</code> to be greater than 0 and <code>acks</code> must be 'all'. If these values are
-     * not explicitly set by the user, suitable values will be chosen. If incompatible values are set, a
-     * <code>ConfigException</code> will be thrown.
+     * If true the consumer's offset will be periodically committed in the background.
      */
-    public ProducerBuilder enableIdempotence(boolean enableIdempotence) {
-        return config(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, enableIdempotence);
+    public ConsumerBuilder enableAutoCommit(boolean enableAutoCommit) {
+        return config(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit);
+    }
+
+    /**
+     * Whether internal topics matching a subscribed pattern should be excluded from the subscription. It
+     * is always possible to explicitly subscribe to an internal topic.
+     */
+    public ConsumerBuilder excludeInternalTopics(boolean excludeInternalTopics) {
+        return config(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG, excludeInternalTopics);
+    }
+
+    /**
+     * The maximum amount of data the server should return for a fetch request. Records are fetched in
+     * batches by the consumer, and if the first record batch in the first non-empty partition of the fetch
+     * is larger than this value, the record batch will still be returned to ensure that the consumer can
+     * make progress. As such, this is not a absolute maximum. The maximum record batch size accepted by
+     * the broker is defined via <code>message.max.bytes</code> (broker config) or
+     * <code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in
+     * parallel.
+     */
+    public ConsumerBuilder fetchMaxBytes(int fetchMaxBytes) {
+        return config(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, fetchMaxBytes);
+    }
+
+    /**
+     * The maximum amount of time the server will block before answering the fetch request if there isn't
+     * sufficient data to immediately satisfy the requirement given by fetch.min.bytes.
+     */
+    public ConsumerBuilder fetchMaxWaitMs(int fetchMaxWaitMs) {
+        return config(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, fetchMaxWaitMs);
+    }
+
+    /**
+     * The minimum amount of data the server should return for a fetch request. If insufficient data is
+     * available the request will wait for that much data to accumulate before answering the request. The
+     * default setting of 1 byte means that fetch requests are answered as soon as a single byte of data is
+     * available or the fetch request times out waiting for data to arrive. Setting this to something
+     * greater than 1 will cause the server to wait for larger amounts of data to accumulate which can
+     * improve server throughput a bit at the cost of some additional latency.
+     */
+    public ConsumerBuilder fetchMinBytes(int fetchMinBytes) {
+        return config(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, fetchMinBytes);
+    }
+
+    /**
+     * A unique string that identifies the consumer group this consumer belongs to. This property is
+     * required if the consumer uses either the group management functionality by using
+     * <code>subscribe(topic)</code> or the Kafka-based offset management strategy.
+     */
+    public ConsumerBuilder groupId(String groupId) {
+        return config(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+    }
+
+    /**
+     * A unique identifier of the consumer instance provided by the end user. Only non-empty strings are
+     * permitted. If set, the consumer is treated as a static member, which means that only one instance
+     * with this ID is allowed in the consumer group at any time. This can be used in combination with a
+     * larger session timeout to avoid group rebalances caused by transient unavailability (e.g. process
+     * restarts). If not set, the consumer will join the group as a dynamic member, which is the
+     * traditional behavior.
+     */
+    public ConsumerBuilder groupInstanceId(String groupInstanceId) {
+        return config(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
+    }
+
+    /**
+     * The expected time between heartbeats to the consumer coordinator when using Kafka's group management
+     * facilities. Heartbeats are used to ensure that the consumer's session stays active and to facilitate
+     * rebalancing when new consumers join or leave the group. The value must be set lower than
+     * <code>session.timeout.ms</code>, but typically should be set no higher than 1/3 of that value. It
+     * can be adjusted even lower to control the expected time for normal rebalances.
+     */
+    public ConsumerBuilder heartbeatIntervalMs(int heartbeatIntervalMs) {
+        return config(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
     }
 
     /**
      * A list of classes to use as interceptors. Implementing the
-     * <code>org.apache.kafka.clients.producer.ProducerInterceptor</code> interface allows you to intercept
-     * (and possibly mutate) the records received by the producer before they are published to the Kafka
-     * cluster. By default, there are no interceptors.
+     * <code>org.apache.kafka.clients.consumer.ConsumerInterceptor</code> interface allows you to intercept
+     * (and possibly mutate) records received by the consumer. By default, there are no interceptors.
      */
-    public ProducerBuilder interceptorClasses(String interceptorClasses) {
-        return config(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, interceptorClasses);
+    public ConsumerBuilder interceptorClasses(String interceptorClasses) {
+        return config(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, interceptorClasses);
     }
 
-    public ProducerBuilder internalAutoDowngradeTxnCommit(boolean internalAutoDowngradeTxnCommit) {
-        return config("internal.auto.downgrade.txn.commit", internalAutoDowngradeTxnCommit);
+    public ConsumerBuilder internalLeaveGroupOnClose(boolean internalLeaveGroupOnClose) {
+        return config("internal.leave.group.on.close", internalLeaveGroupOnClose);
+    }
+
+    public ConsumerBuilder internalThrowOnFetchStableOffsetUnsupported(
+            boolean internalThrowOnFetchStableOffsetUnsupported) {
+        return config("internal.throw.on.fetch.stable.offset.unsupported", internalThrowOnFetchStableOffsetUnsupported);
     }
 
     /**
-     * Serializer class for key that implements the
-     * <code>org.apache.kafka.common.serialization.Serializer</code> interface.
+     * Controls how to read messages written transactionally. If set to <code>read_committed</code>,
+     * consumer.poll() will only return transactional messages which have been committed. If set to
+     * <code>read_uncommitted</code> (the default), consumer.poll() will return all messages, even
+     * transactional messages which have been aborted. Non-transactional messages will be returned
+     * unconditionally in either mode. <p>Messages will always be returned in offset order. Hence, in
+     * <code>read_committed</code> mode, consumer.poll() will only return messages up to the last stable
+     * offset (LSO), which is the one less than the offset of the first open transaction. In particular any
+     * messages appearing after messages belonging to ongoing transactions will be withheld until the
+     * relevant transaction has been completed. As a result, <code>read_committed</code> consumers will not
+     * be able to read up to the high watermark when there are in flight transactions.</p><p> Further, when
+     * in <code>read_committed</code> the seekToEnd method will return the LSO
      */
-    public ProducerBuilder keySerializer(Class<? extends Serializer<?>> keySerializer) {
-        return config(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
+    public ConsumerBuilder isolationLevel(IsolationLevel isolationLevel) {
+        return config(ConsumerConfig.ISOLATION_LEVEL_CONFIG, isolationLevel);
+    }
+
+    /**
+     * Deserializer class for key that implements the
+     * <code>org.apache.kafka.common.serialization.Deserializer</code> interface.
+     */
+    public ConsumerBuilder keyDeserializer(Class<? extends Deserializer<?>> keyDeserializer) {
+        return config(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer);
     }
 
     /**
      * Determines how to construct the subject name under which the key schema is registered with the
      * schema registry. By default, <topic>-key is used as subject.
      */
-    public ProducerBuilder keySubjectNameStrategy(Class<?> keySubjectNameStrategy) {
+    public ConsumerBuilder keySubjectNameStrategy(Class<?> keySubjectNameStrategy) {
         return config(AbstractKafkaSchemaSerDeConfig.KEY_SUBJECT_NAME_STRATEGY, keySubjectNameStrategy);
     }
 
@@ -270,67 +381,49 @@ public class ProducerBuilder {
      * Whether to check for backward compatibility between the latest subject version and  the Schema of
      * the object to be serialized
      */
-    public ProducerBuilder latestCompatibilityStrict(boolean latestCompatibilityStrict) {
+    public ConsumerBuilder latestCompatibilityStrict(boolean latestCompatibilityStrict) {
         return config(AbstractKafkaSchemaSerDeConfig.LATEST_COMPATIBILITY_STRICT, latestCompatibilityStrict);
     }
 
     /**
-     * The producer groups together any records that arrive in between request transmissions into a single
-     * batched request. Normally this occurs only under load when records arrive faster than they can be
-     * sent out. However in some circumstances the client may want to reduce the number of requests even
-     * under moderate load. This setting accomplishes this by adding a small amount of artificial
-     * delay&mdash;that is, rather than immediately sending out a record the producer will wait for up to
-     * the given delay to allow other records to be sent so that the sends can be batched together. This
-     * can be thought of as analogous to Nagle's algorithm in TCP. This setting gives the upper bound on
-     * the delay for batching: once we get <code>batch.size</code> worth of records for a partition it will
-     * be sent immediately regardless of this setting, however if we have fewer than this many bytes
-     * accumulated for this partition we will 'linger' for the specified time waiting for more records to
-     * show up. This setting defaults to 0 (i.e. no delay). Setting <code>linger.ms=5</code>, for example,
-     * would have the effect of reducing the number of requests sent but would add up to 5ms of latency to
-     * records sent in the absence of load.
+     * The maximum amount of data per-partition the server will return. Records are fetched in batches by
+     * the consumer. If the first record batch in the first non-empty partition of the fetch is larger than
+     * this limit, the batch will still be returned to ensure that the consumer can make progress. The
+     * maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code>
+     * (broker config) or <code>max.message.bytes</code> (topic config). See fetch.max.bytes for limiting
+     * the consumer request size.
      */
-    public ProducerBuilder lingerMs(long lingerMs) {
-        return config(ProducerConfig.LINGER_MS_CONFIG, lingerMs);
+    public ConsumerBuilder maxPartitionFetchBytes(int maxPartitionFetchBytes) {
+        return config(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes);
     }
 
     /**
-     * The configuration controls how long the <code>KafkaProducer</code>'s <code>send()</code>,
-     * <code>partitionsFor()</code>, <code>initTransactions()</code>,
-     * <code>sendOffsetsToTransaction()</code>, <code>commitTransaction()</code> and
-     * <code>abortTransaction()</code> methods will block. For <code>send()</code> this timeout bounds the
-     * total time waiting for both metadata fetch and buffer allocation (blocking in the user-supplied
-     * serializers or partitioner is not counted against this timeout). For <code>partitionsFor()</code>
-     * this timeout bounds the time spent waiting for metadata if it is unavailable. The
-     * transaction-related methods always block, but may timeout if the transaction coordinator could not
-     * be discovered or did not respond within the timeout.
+     * The maximum delay between invocations of poll() when using consumer group management. This places an
+     * upper bound on the amount of time that the consumer can be idle before fetching more records. If
+     * poll() is not called before expiration of this timeout, then the consumer is considered failed and
+     * the group will rebalance in order to reassign the partitions to another member. For consumers using
+     * a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be
+     * immediately reassigned. Instead, the consumer will stop sending heartbeats and partitions will be
+     * reassigned after expiration of <code>session.timeout.ms</code>. This mirrors the behavior of a
+     * static consumer which has shutdown.
      */
-    public ProducerBuilder maxBlockMs(long maxBlockMs) {
-        return config(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs);
+    public ConsumerBuilder maxPollIntervalMs(int maxPollIntervalMs) {
+        return config(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollIntervalMs);
     }
 
     /**
-     * The maximum number of unacknowledged requests the client will send on a single connection before
-     * blocking. Note that if this setting is set to be greater than 1 and there are failed sends, there is
-     * a risk of message re-ordering due to retries (i.e., if retries are enabled).
+     * The maximum number of records returned in a single call to poll(). Note, that
+     * <code>max.poll.records</code> does not impact the underlying fetching behavior. The consumer will
+     * cache the records from each fetch request and returns them incrementally from each poll.
      */
-    public ProducerBuilder maxInFlightRequestsPerConnection(int maxInFlightRequestsPerConnection) {
-        return config(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsPerConnection);
-    }
-
-    /**
-     * The maximum size of a request in bytes. This setting will limit the number of record batches the
-     * producer will send in a single request to avoid sending huge requests. This is also effectively a
-     * cap on the maximum uncompressed record batch size. Note that the server has its own cap on the
-     * record batch size (after compression if compression is enabled) which may be different from this.
-     */
-    public ProducerBuilder maxRequestSize(int maxRequestSize) {
-        return config(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, maxRequestSize);
+    public ConsumerBuilder maxPollRecords(int maxPollRecords) {
+        return config(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords);
     }
 
     /**
      * Maximum number of schemas to create or cache locally.
      */
-    public ProducerBuilder maxSchemasPerSubject(int maxSchemasPerSubject) {
+    public ConsumerBuilder maxSchemasPerSubject(int maxSchemasPerSubject) {
         return config(AbstractKafkaSchemaSerDeConfig.MAX_SCHEMAS_PER_SUBJECT_CONFIG, maxSchemasPerSubject);
     }
 
@@ -338,17 +431,8 @@ public class ProducerBuilder {
      * The period of time in milliseconds after which we force a refresh of metadata even if we haven't
      * seen any partition leadership changes to proactively discover any new brokers or partitions.
      */
-    public ProducerBuilder metadataMaxAgeMs(long metadataMaxAgeMs) {
-        return config(ProducerConfig.METADATA_MAX_AGE_CONFIG, metadataMaxAgeMs);
-    }
-
-    /**
-     * Controls how long the producer will cache metadata for a topic that's idle. If the elapsed time
-     * since a topic was last produced to exceeds the metadata idle duration, then the topic's metadata is
-     * forgotten and the next access to it will force a metadata fetch request.
-     */
-    public ProducerBuilder metadataMaxIdleMs(long metadataMaxIdleMs) {
-        return config(ProducerConfig.METADATA_MAX_IDLE_CONFIG, metadataMaxIdleMs);
+    public ConsumerBuilder metadataMaxAgeMs(long metadataMaxAgeMs) {
+        return config(ConsumerConfig.METADATA_MAX_AGE_CONFIG, metadataMaxAgeMs);
     }
 
     /**
@@ -357,51 +441,62 @@ public class ProducerBuilder {
      * that will be notified of new metric creation. The JmxReporter is always included to register JMX
      * statistics.
      */
-    public ProducerBuilder metricReporters(String metricReporters) {
-        return config(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, metricReporters);
+    public ConsumerBuilder metricReporters(String metricReporters) {
+        return config(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, metricReporters);
     }
 
     /**
      * The number of samples maintained to compute metrics.
      */
-    public ProducerBuilder metricsNumSamples(int metricsNumSamples) {
-        return config(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG, metricsNumSamples);
+    public ConsumerBuilder metricsNumSamples(int metricsNumSamples) {
+        return config(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, metricsNumSamples);
     }
 
     /**
      * The highest recording level for metrics.
      */
-    public ProducerBuilder metricsRecordingLevel(Sensor.RecordingLevel metricsRecordingLevel) {
-        return config(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG, metricsRecordingLevel);
+    public ConsumerBuilder metricsRecordingLevel(Sensor.RecordingLevel metricsRecordingLevel) {
+        return config(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, metricsRecordingLevel);
     }
 
     /**
      * The window of time a metrics sample is computed over.
      */
-    public ProducerBuilder metricsSampleWindowMs(long metricsSampleWindowMs) {
-        return config(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, metricsSampleWindowMs);
+    public ConsumerBuilder metricsSampleWindowMs(long metricsSampleWindowMs) {
+        return config(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG, metricsSampleWindowMs);
     }
 
     /**
-     * Partitioner class that implements the <code>org.apache.kafka.clients.producer.Partitioner</code>
-     * interface.
+     * A list of class names or class types, ordered by preference, of supported partition assignment
+     * strategies that the client will use to distribute partition ownership amongst consumer instances
+     * when group management is used. Available options
+     * are:<ul><li><code>org.apache.kafka.clients.consumer.RangeAssignor</code>: The default assignor,
+     * which works on a per-topic
+     * basis.</li><li><code>org.apache.kafka.clients.consumer.RoundRobinAssignor</code>: Assigns partitions
+     * to consumers in a round-robin
+     * fashion.</li><li><code>org.apache.kafka.clients.consumer.StickyAssignor</code>: Guarantees an
+     * assignment that is maximally balanced while preserving as many existing partition assignments as
+     * possible.</li><li><code>org.apache.kafka.clients.consumer.CooperativeStickyAssignor</code>: Follows
+     * the same StickyAssignor logic, but allows for cooperative rebalancing.</li></ul><p>Implementing the
+     * <code>org.apache.kafka.clients.consumer.ConsumerPartitionAssignor</code> interface allows you to
+     * plug in a custom assignment strategy.
      */
-    public ProducerBuilder partitionerClass(Class<?> partitionerClass) {
-        return config(ProducerConfig.PARTITIONER_CLASS_CONFIG, partitionerClass);
+    public ConsumerBuilder partitionAssignmentStrategy(String partitionAssignmentStrategy) {
+        return config(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, partitionAssignmentStrategy);
     }
 
     /**
      * The hostname, or address, of the proxy server that will be used to connect to the schema registry
      * instances.
      */
-    public ProducerBuilder proxyHost(String proxyHost) {
+    public ConsumerBuilder proxyHost(String proxyHost) {
         return config(AbstractKafkaSchemaSerDeConfig.PROXY_HOST, proxyHost);
     }
 
     /**
      * The port number of the proxy server that will be used to connect to the schema registry instances.
      */
-    public ProducerBuilder proxyPort(int proxyPort) {
+    public ConsumerBuilder proxyPort(int proxyPort) {
         return config(AbstractKafkaSchemaSerDeConfig.PROXY_PORT, proxyPort);
     }
 
@@ -409,8 +504,8 @@ public class ProducerBuilder {
      * The size of the TCP receive buffer (SO_RCVBUF) to use when reading data. If the value is -1, the OS
      * default will be used.
      */
-    public ProducerBuilder receiveBufferBytes(int receiveBufferBytes) {
-        return config(ProducerConfig.RECEIVE_BUFFER_CONFIG, receiveBufferBytes);
+    public ConsumerBuilder receiveBufferBytes(int receiveBufferBytes) {
+        return config(ConsumerConfig.RECEIVE_BUFFER_CONFIG, receiveBufferBytes);
     }
 
     /**
@@ -419,8 +514,8 @@ public class ProducerBuilder {
      * consecutive connection failure, up to this maximum. After calculating the backoff increase, 20%
      * random jitter is added to avoid connection storms.
      */
-    public ProducerBuilder reconnectBackoffMaxMs(long reconnectBackoffMaxMs) {
-        return config(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, reconnectBackoffMaxMs);
+    public ConsumerBuilder reconnectBackoffMaxMs(long reconnectBackoffMaxMs) {
+        return config(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, reconnectBackoffMaxMs);
     }
 
     /**
@@ -428,50 +523,32 @@ public class ProducerBuilder {
      * repeatedly connecting to a host in a tight loop. This backoff applies to all connection attempts by
      * the client to a broker.
      */
-    public ProducerBuilder reconnectBackoffMs(long reconnectBackoffMs) {
-        return config(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG, reconnectBackoffMs);
+    public ConsumerBuilder reconnectBackoffMs(long reconnectBackoffMs) {
+        return config(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, reconnectBackoffMs);
     }
 
     /**
      * The configuration controls the maximum amount of time the client will wait for the response of a
      * request. If the response is not received before the timeout elapses the client will resend the
-     * request if necessary or fail the request if retries are exhausted. This should be larger than
-     * <code>replica.lag.time.max.ms</code> (a broker configuration) to reduce the possibility of message
-     * duplication due to unnecessary producer retries.
+     * request if necessary or fail the request if retries are exhausted.
      */
-    public ProducerBuilder requestTimeoutMs(int requestTimeoutMs) {
-        return config(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
-    }
-
-    /**
-     * Setting a value greater than zero will cause the client to resend any record whose send fails with a
-     * potentially transient error. Note that this retry is no different than if the client resent the
-     * record upon receiving the error. Allowing retries without setting
-     * <code>max.in.flight.requests.per.connection</code> to 1 will potentially change the ordering of
-     * records because if two batches are sent to a single partition, and the first fails and is retried
-     * but the second succeeds, then the records in the second batch may appear first. Note additionally
-     * that produce requests will be failed before the number of retries has been exhausted if the timeout
-     * configured by <code>delivery.timeout.ms</code> expires first before successful acknowledgement.
-     * Users should generally prefer to leave this config unset and instead use
-     * <code>delivery.timeout.ms</code> to control retry behavior.
-     */
-    public ProducerBuilder retries(int retries) {
-        return config(ProducerConfig.RETRIES_CONFIG, retries);
+    public ConsumerBuilder requestTimeoutMs(int requestTimeoutMs) {
+        return config(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
     }
 
     /**
      * The amount of time to wait before attempting to retry a failed request to a given topic partition.
      * This avoids repeatedly sending requests in a tight loop under some failure scenarios.
      */
-    public ProducerBuilder retryBackoffMs(long retryBackoffMs) {
-        return config(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
+    public ConsumerBuilder retryBackoffMs(long retryBackoffMs) {
+        return config(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
     }
 
     /**
      * The fully qualified name of a SASL client callback handler class that implements the
      * AuthenticateCallbackHandler interface.
      */
-    public ProducerBuilder saslClientCallbackHandlerClass(Class<?> saslClientCallbackHandlerClass) {
+    public ConsumerBuilder saslClientCallbackHandlerClass(Class<?> saslClientCallbackHandlerClass) {
         return config(SaslConfigs.SASL_CLIENT_CALLBACK_HANDLER_CLASS, saslClientCallbackHandlerClass);
     }
 
@@ -484,21 +561,21 @@ public class ProducerBuilder {
      * For example, listener.name.sasl_ssl.scram-sha-256.sasl.jaas.config=com.example.ScramLoginModule
      * required;
      */
-    public ProducerBuilder saslJaasConfig(String saslJaasConfig) {
+    public ConsumerBuilder saslJaasConfig(String saslJaasConfig) {
         return config(SaslConfigs.SASL_JAAS_CONFIG, saslJaasConfig);
     }
 
     /**
      * Kerberos kinit command path.
      */
-    public ProducerBuilder saslKerberosKinitCmd(String saslKerberosKinitCmd) {
+    public ConsumerBuilder saslKerberosKinitCmd(String saslKerberosKinitCmd) {
         return config(SaslConfigs.SASL_KERBEROS_KINIT_CMD, saslKerberosKinitCmd);
     }
 
     /**
      * Login thread sleep time between refresh attempts.
      */
-    public ProducerBuilder saslKerberosMinTimeBeforeRelogin(long saslKerberosMinTimeBeforeRelogin) {
+    public ConsumerBuilder saslKerberosMinTimeBeforeRelogin(long saslKerberosMinTimeBeforeRelogin) {
         return config(SaslConfigs.SASL_KERBEROS_MIN_TIME_BEFORE_RELOGIN, saslKerberosMinTimeBeforeRelogin);
     }
 
@@ -506,14 +583,14 @@ public class ProducerBuilder {
      * The Kerberos principal name that Kafka runs as. This can be defined either in Kafka's JAAS config or
      * in Kafka's config.
      */
-    public ProducerBuilder saslKerberosServiceName(String saslKerberosServiceName) {
+    public ConsumerBuilder saslKerberosServiceName(String saslKerberosServiceName) {
         return config(SaslConfigs.SASL_KERBEROS_SERVICE_NAME, saslKerberosServiceName);
     }
 
     /**
      * Percentage of random jitter added to the renewal time.
      */
-    public ProducerBuilder saslKerberosTicketRenewJitter(double saslKerberosTicketRenewJitter) {
+    public ConsumerBuilder saslKerberosTicketRenewJitter(double saslKerberosTicketRenewJitter) {
         return config(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_JITTER, saslKerberosTicketRenewJitter);
     }
 
@@ -521,7 +598,7 @@ public class ProducerBuilder {
      * Login thread will sleep until the specified window factor of time from last refresh to ticket's
      * expiry has been reached, at which time it will try to renew the ticket.
      */
-    public ProducerBuilder saslKerberosTicketRenewWindowFactor(double saslKerberosTicketRenewWindowFactor) {
+    public ConsumerBuilder saslKerberosTicketRenewWindowFactor(double saslKerberosTicketRenewWindowFactor) {
         return config(SaslConfigs.SASL_KERBEROS_TICKET_RENEW_WINDOW_FACTOR, saslKerberosTicketRenewWindowFactor);
     }
 
@@ -531,7 +608,7 @@ public class ProducerBuilder {
      * with listener prefix and SASL mechanism name in lower-case. For example,
      * listener.name.sasl_ssl.scram-sha-256.sasl.login.callback.handler.class=com.example.CustomScramLoginCallbackHandler
      */
-    public ProducerBuilder saslLoginCallbackHandlerClass(Class<?> saslLoginCallbackHandlerClass) {
+    public ConsumerBuilder saslLoginCallbackHandlerClass(Class<?> saslLoginCallbackHandlerClass) {
         return config(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, saslLoginCallbackHandlerClass);
     }
 
@@ -540,7 +617,7 @@ public class ProducerBuilder {
      * must be prefixed with listener prefix and SASL mechanism name in lower-case. For example,
      * listener.name.sasl_ssl.scram-sha-256.sasl.login.class=com.example.CustomScramLogin
      */
-    public ProducerBuilder saslLoginClass(Class<?> saslLoginClass) {
+    public ConsumerBuilder saslLoginClass(Class<?> saslLoginClass) {
         return config(SaslConfigs.SASL_LOGIN_CLASS, saslLoginClass);
     }
 
@@ -552,7 +629,7 @@ public class ProducerBuilder {
      * specified. This value and sasl.login.refresh.min.period.seconds are both ignored if their sum
      * exceeds the remaining lifetime of a credential. Currently applies only to OAUTHBEARER.
      */
-    public ProducerBuilder saslLoginRefreshBufferSeconds(short saslLoginRefreshBufferSeconds) {
+    public ConsumerBuilder saslLoginRefreshBufferSeconds(short saslLoginRefreshBufferSeconds) {
         return config(SaslConfigs.SASL_LOGIN_REFRESH_BUFFER_SECONDS, saslLoginRefreshBufferSeconds);
     }
 
@@ -562,7 +639,7 @@ public class ProducerBuilder {
      * if no value is specified.  This value and  sasl.login.refresh.buffer.seconds are both ignored if
      * their sum exceeds the remaining lifetime of a credential. Currently applies only to OAUTHBEARER.
      */
-    public ProducerBuilder saslLoginRefreshMinPeriodSeconds(short saslLoginRefreshMinPeriodSeconds) {
+    public ConsumerBuilder saslLoginRefreshMinPeriodSeconds(short saslLoginRefreshMinPeriodSeconds) {
         return config(SaslConfigs.SASL_LOGIN_REFRESH_MIN_PERIOD_SECONDS, saslLoginRefreshMinPeriodSeconds);
     }
 
@@ -572,7 +649,7 @@ public class ProducerBuilder {
      * between 0.5 (50%) and 1.0 (100%) inclusive; a default value of 0.8 (80%) is used if no value is
      * specified. Currently applies only to OAUTHBEARER.
      */
-    public ProducerBuilder saslLoginRefreshWindowFactor(double saslLoginRefreshWindowFactor) {
+    public ConsumerBuilder saslLoginRefreshWindowFactor(double saslLoginRefreshWindowFactor) {
         return config(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_FACTOR, saslLoginRefreshWindowFactor);
     }
 
@@ -581,7 +658,7 @@ public class ProducerBuilder {
      * refresh thread's sleep time. Legal values are between 0 and 0.25 (25%) inclusive; a default value of
      * 0.05 (5%) is used if no value is specified. Currently applies only to OAUTHBEARER.
      */
-    public ProducerBuilder saslLoginRefreshWindowJitter(double saslLoginRefreshWindowJitter) {
+    public ConsumerBuilder saslLoginRefreshWindowJitter(double saslLoginRefreshWindowJitter) {
         return config(SaslConfigs.SASL_LOGIN_REFRESH_WINDOW_JITTER, saslLoginRefreshWindowJitter);
     }
 
@@ -589,21 +666,21 @@ public class ProducerBuilder {
      * SASL mechanism used for client connections. This may be any mechanism for which a security provider
      * is available. GSSAPI is the default mechanism.
      */
-    public ProducerBuilder saslMechanism(String saslMechanism) {
+    public ConsumerBuilder saslMechanism(String saslMechanism) {
         return config(SaslConfigs.SASL_MECHANISM, saslMechanism);
     }
 
     /**
      * If true, uses the reflection API when serializing/deserializing
      */
-    public ProducerBuilder schemaReflection(boolean schemaReflection) {
+    public ConsumerBuilder schemaReflection(boolean schemaReflection) {
         return config(AbstractKafkaSchemaSerDeConfig.SCHEMA_REFLECTION_CONFIG, schemaReflection);
     }
 
     /**
      * Specify the user info for Basic Auth in the form of {username}:{password}
      */
-    public ProducerBuilder schemaRegistryBasicAuthUserInfo(String schemaRegistryBasicAuthUserInfo) {
+    public ConsumerBuilder schemaRegistryBasicAuthUserInfo(String schemaRegistryBasicAuthUserInfo) {
         return config(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_USER_INFO_CONFIG, schemaRegistryBasicAuthUserInfo);
     }
 
@@ -612,7 +689,7 @@ public class ProducerBuilder {
      * exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL
      * network protocol. By default all the available cipher suites are supported.
      */
-    public ProducerBuilder schemaRegistrySslCipherSuites(String schemaRegistrySslCipherSuites) {
+    public ConsumerBuilder schemaRegistrySslCipherSuites(String schemaRegistrySslCipherSuites) {
         return config("schema.registry.ssl.cipher.suites", schemaRegistrySslCipherSuites);
     }
 
@@ -623,14 +700,14 @@ public class ProducerBuilder {
      * least TLSv1.2). This default should be fine for most cases. Also see the config documentation for
      * `ssl.protocol`.
      */
-    public ProducerBuilder schemaRegistrySslEnabledProtocols(String schemaRegistrySslEnabledProtocols) {
+    public ConsumerBuilder schemaRegistrySslEnabledProtocols(String schemaRegistrySslEnabledProtocols) {
         return config("schema.registry.ssl.enabled.protocols", schemaRegistrySslEnabledProtocols);
     }
 
     /**
      * The endpoint identification algorithm to validate server hostname using server certificate.
      */
-    public ProducerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(
+    public ConsumerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(
             String schemaRegistrySslEndpointIdentificationAlgorithm) {
         return config("schema.registry.ssl.endpoint.identification.algorithm",
                 schemaRegistrySslEndpointIdentificationAlgorithm);
@@ -640,7 +717,7 @@ public class ProducerBuilder {
      * The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine
      * objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory
      */
-    public ProducerBuilder schemaRegistrySslEngineFactoryClass(Class<?> schemaRegistrySslEngineFactoryClass) {
+    public ConsumerBuilder schemaRegistrySslEngineFactoryClass(Class<?> schemaRegistrySslEngineFactoryClass) {
         return config("schema.registry.ssl.engine.factory.class", schemaRegistrySslEngineFactoryClass);
     }
 
@@ -648,7 +725,7 @@ public class ProducerBuilder {
      * The password of the private key in the key store file orthe PEM key specified in `ssl.keystore.key'.
      * This is required for clients only if two-way authentication is configured.
      */
-    public ProducerBuilder schemaRegistrySslKeyPassword(String schemaRegistrySslKeyPassword) {
+    public ConsumerBuilder schemaRegistrySslKeyPassword(String schemaRegistrySslKeyPassword) {
         return config("schema.registry.ssl.key.password", schemaRegistrySslKeyPassword);
     }
 
@@ -656,7 +733,7 @@ public class ProducerBuilder {
      * The algorithm used by key manager factory for SSL connections. Default value is the key manager
      * factory algorithm configured for the Java Virtual Machine.
      */
-    public ProducerBuilder schemaRegistrySslKeymanagerAlgorithm(String schemaRegistrySslKeymanagerAlgorithm) {
+    public ConsumerBuilder schemaRegistrySslKeymanagerAlgorithm(String schemaRegistrySslKeymanagerAlgorithm) {
         return config("schema.registry.ssl.keymanager.algorithm", schemaRegistrySslKeymanagerAlgorithm);
     }
 
@@ -664,7 +741,7 @@ public class ProducerBuilder {
      * Certificate chain in the format specified by 'ssl.keystore.type'. Default SSL engine factory
      * supports only PEM format with a list of X.509 certificates
      */
-    public ProducerBuilder schemaRegistrySslKeystoreCertificateChain(String schemaRegistrySslKeystoreCertificateChain) {
+    public ConsumerBuilder schemaRegistrySslKeystoreCertificateChain(String schemaRegistrySslKeystoreCertificateChain) {
         return config("schema.registry.ssl.keystore.certificate.chain", schemaRegistrySslKeystoreCertificateChain);
     }
 
@@ -673,7 +750,7 @@ public class ProducerBuilder {
      * PEM format with PKCS#8 keys. If the key is encrypted, key password must be specified using
      * 'ssl.key.password'
      */
-    public ProducerBuilder schemaRegistrySslKeystoreKey(String schemaRegistrySslKeystoreKey) {
+    public ConsumerBuilder schemaRegistrySslKeystoreKey(String schemaRegistrySslKeystoreKey) {
         return config("schema.registry.ssl.keystore.key", schemaRegistrySslKeystoreKey);
     }
 
@@ -681,7 +758,7 @@ public class ProducerBuilder {
      * The location of the key store file. This is optional for client and can be used for two-way
      * authentication for client.
      */
-    public ProducerBuilder schemaRegistrySslKeystoreLocation(String schemaRegistrySslKeystoreLocation) {
+    public ConsumerBuilder schemaRegistrySslKeystoreLocation(String schemaRegistrySslKeystoreLocation) {
         return config("schema.registry.ssl.keystore.location", schemaRegistrySslKeystoreLocation);
     }
 
@@ -689,14 +766,14 @@ public class ProducerBuilder {
      * The store password for the key store file. This is optional for client and only needed if
      * 'ssl.keystore.location' is configured.  Key store password is not supported for PEM format.
      */
-    public ProducerBuilder schemaRegistrySslKeystorePassword(String schemaRegistrySslKeystorePassword) {
+    public ConsumerBuilder schemaRegistrySslKeystorePassword(String schemaRegistrySslKeystorePassword) {
         return config("schema.registry.ssl.keystore.password", schemaRegistrySslKeystorePassword);
     }
 
     /**
      * The file format of the key store file. This is optional for client.
      */
-    public ProducerBuilder schemaRegistrySslKeystoreType(String schemaRegistrySslKeystoreType) {
+    public ConsumerBuilder schemaRegistrySslKeystoreType(String schemaRegistrySslKeystoreType) {
         return config("schema.registry.ssl.keystore.type", schemaRegistrySslKeystoreType);
     }
 
@@ -710,7 +787,7 @@ public class ProducerBuilder {
      * 'TLSv1.3' even if it is one of the values in ssl.enabled.protocols and the server only supports
      * 'TLSv1.3'.
      */
-    public ProducerBuilder schemaRegistrySslProtocol(String schemaRegistrySslProtocol) {
+    public ConsumerBuilder schemaRegistrySslProtocol(String schemaRegistrySslProtocol) {
         return config("schema.registry.ssl.protocol", schemaRegistrySslProtocol);
     }
 
@@ -718,14 +795,14 @@ public class ProducerBuilder {
      * The name of the security provider used for SSL connections. Default value is the default security
      * provider of the JVM.
      */
-    public ProducerBuilder schemaRegistrySslProvider(String schemaRegistrySslProvider) {
+    public ConsumerBuilder schemaRegistrySslProvider(String schemaRegistrySslProvider) {
         return config("schema.registry.ssl.provider", schemaRegistrySslProvider);
     }
 
     /**
      * The SecureRandom PRNG implementation to use for SSL cryptography operations.
      */
-    public ProducerBuilder schemaRegistrySslSecureRandomImplementation(
+    public ConsumerBuilder schemaRegistrySslSecureRandomImplementation(
             String schemaRegistrySslSecureRandomImplementation) {
         return config("schema.registry.ssl.secure.random.implementation", schemaRegistrySslSecureRandomImplementation);
     }
@@ -734,7 +811,7 @@ public class ProducerBuilder {
      * The algorithm used by trust manager factory for SSL connections. Default value is the trust manager
      * factory algorithm configured for the Java Virtual Machine.
      */
-    public ProducerBuilder schemaRegistrySslTrustmanagerAlgorithm(String schemaRegistrySslTrustmanagerAlgorithm) {
+    public ConsumerBuilder schemaRegistrySslTrustmanagerAlgorithm(String schemaRegistrySslTrustmanagerAlgorithm) {
         return config("schema.registry.ssl.trustmanager.algorithm", schemaRegistrySslTrustmanagerAlgorithm);
     }
 
@@ -742,14 +819,14 @@ public class ProducerBuilder {
      * Trusted certificates in the format specified by 'ssl.truststore.type'. Default SSL engine factory
      * supports only PEM format with X.509 certificates.
      */
-    public ProducerBuilder schemaRegistrySslTruststoreCertificates(String schemaRegistrySslTruststoreCertificates) {
+    public ConsumerBuilder schemaRegistrySslTruststoreCertificates(String schemaRegistrySslTruststoreCertificates) {
         return config("schema.registry.ssl.truststore.certificates", schemaRegistrySslTruststoreCertificates);
     }
 
     /**
      * The location of the trust store file.
      */
-    public ProducerBuilder schemaRegistrySslTruststoreLocation(String schemaRegistrySslTruststoreLocation) {
+    public ConsumerBuilder schemaRegistrySslTruststoreLocation(String schemaRegistrySslTruststoreLocation) {
         return config("schema.registry.ssl.truststore.location", schemaRegistrySslTruststoreLocation);
     }
 
@@ -758,14 +835,14 @@ public class ProducerBuilder {
      * still be used, but integrity checking is disabled. Trust store password is not supported for PEM
      * format.
      */
-    public ProducerBuilder schemaRegistrySslTruststorePassword(String schemaRegistrySslTruststorePassword) {
+    public ConsumerBuilder schemaRegistrySslTruststorePassword(String schemaRegistrySslTruststorePassword) {
         return config("schema.registry.ssl.truststore.password", schemaRegistrySslTruststorePassword);
     }
 
     /**
      * The file format of the trust store file.
      */
-    public ProducerBuilder schemaRegistrySslTruststoreType(String schemaRegistrySslTruststoreType) {
+    public ConsumerBuilder schemaRegistrySslTruststoreType(String schemaRegistrySslTruststoreType) {
         return config("schema.registry.ssl.truststore.type", schemaRegistrySslTruststoreType);
     }
 
@@ -775,7 +852,7 @@ public class ProducerBuilder {
      * scope using the 'mock://' pseudo-protocol. For example, 'mock://my-scope-name' corresponds to
      * 'MockSchemaRegistry.getClientForScope("my-scope-name")'.
      */
-    public ProducerBuilder schemaRegistryUrl(String schemaRegistryUrl) {
+    public ConsumerBuilder schemaRegistryUrl(String schemaRegistryUrl) {
         return config(AbstractKafkaSchemaSerDeConfig.SCHEMA_REGISTRY_URL_CONFIG, schemaRegistryUrl);
     }
 
@@ -783,7 +860,7 @@ public class ProducerBuilder {
      * Protocol used to communicate with brokers. Valid values are: PLAINTEXT, SSL, SASL_PLAINTEXT,
      * SASL_SSL.
      */
-    public ProducerBuilder securityProtocol(String securityProtocol) {
+    public ConsumerBuilder securityProtocol(String securityProtocol) {
         return config(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol);
     }
 
@@ -792,16 +869,28 @@ public class ProducerBuilder {
      * These classes should implement the
      * <code>org.apache.kafka.common.security.auth.SecurityProviderCreator</code> interface.
      */
-    public ProducerBuilder securityProviders(String securityProviders) {
-        return config(ProducerConfig.SECURITY_PROVIDERS_CONFIG, securityProviders);
+    public ConsumerBuilder securityProviders(String securityProviders) {
+        return config(ConsumerConfig.SECURITY_PROVIDERS_CONFIG, securityProviders);
     }
 
     /**
      * The size of the TCP send buffer (SO_SNDBUF) to use when sending data. If the value is -1, the OS
      * default will be used.
      */
-    public ProducerBuilder sendBufferBytes(int sendBufferBytes) {
-        return config(ProducerConfig.SEND_BUFFER_CONFIG, sendBufferBytes);
+    public ConsumerBuilder sendBufferBytes(int sendBufferBytes) {
+        return config(ConsumerConfig.SEND_BUFFER_CONFIG, sendBufferBytes);
+    }
+
+    /**
+     * The timeout used to detect client failures when using Kafka's group management facility. The client
+     * sends periodic heartbeats to indicate its liveness to the broker. If no heartbeats are received by
+     * the broker before the expiration of this session timeout, then the broker will remove this client
+     * from the group and initiate a rebalance. Note that the value must be in the allowable range as
+     * configured in the broker configuration by <code>group.min.session.timeout.ms</code> and
+     * <code>group.max.session.timeout.ms</code>.
+     */
+    public ConsumerBuilder sessionTimeoutMs(int sessionTimeoutMs) {
+        return config(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
     }
 
     /**
@@ -810,16 +899,23 @@ public class ProducerBuilder {
      * this maximum. To avoid connection storms, a randomization factor of 0.2 will be applied to the
      * timeout resulting in a random range between 20% below and 20% above the computed value.
      */
-    public ProducerBuilder socketConnectionSetupTimeoutMaxMs(long socketConnectionSetupTimeoutMaxMs) {
-        return config(ProducerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, socketConnectionSetupTimeoutMaxMs);
+    public ConsumerBuilder socketConnectionSetupTimeoutMaxMs(long socketConnectionSetupTimeoutMaxMs) {
+        return config(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_CONFIG, socketConnectionSetupTimeoutMaxMs);
     }
 
     /**
      * The amount of time the client will wait for the socket connection to be established. If the
      * connection is not built before the timeout elapses, clients will close the socket channel.
      */
-    public ProducerBuilder socketConnectionSetupTimeoutMs(long socketConnectionSetupTimeoutMs) {
-        return config(ProducerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, socketConnectionSetupTimeoutMs);
+    public ConsumerBuilder socketConnectionSetupTimeoutMs(long socketConnectionSetupTimeoutMs) {
+        return config(ConsumerConfig.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG, socketConnectionSetupTimeoutMs);
+    }
+
+    /**
+     * If true, tries to look up the SpecificRecord class
+     */
+    public ConsumerBuilder specificAvroReader(boolean specificAvroReader) {
+        return config(KafkaAvroDeserializerConfig.SPECIFIC_AVRO_READER_CONFIG, specificAvroReader);
     }
 
     /**
@@ -827,7 +923,7 @@ public class ProducerBuilder {
      * exchange algorithm used to negotiate the security settings for a network connection using TLS or SSL
      * network protocol. By default all the available cipher suites are supported.
      */
-    public ProducerBuilder sslCipherSuites(String sslCipherSuites) {
+    public ConsumerBuilder sslCipherSuites(String sslCipherSuites) {
         return config(SslConfigs.SSL_CIPHER_SUITES_CONFIG, sslCipherSuites);
     }
 
@@ -838,14 +934,14 @@ public class ProducerBuilder {
      * least TLSv1.2). This default should be fine for most cases. Also see the config documentation for
      * `ssl.protocol`.
      */
-    public ProducerBuilder sslEnabledProtocols(String sslEnabledProtocols) {
+    public ConsumerBuilder sslEnabledProtocols(String sslEnabledProtocols) {
         return config(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, sslEnabledProtocols);
     }
 
     /**
      * The endpoint identification algorithm to validate server hostname using server certificate.
      */
-    public ProducerBuilder sslEndpointIdentificationAlgorithm(String sslEndpointIdentificationAlgorithm) {
+    public ConsumerBuilder sslEndpointIdentificationAlgorithm(String sslEndpointIdentificationAlgorithm) {
         return config(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, sslEndpointIdentificationAlgorithm);
     }
 
@@ -853,7 +949,7 @@ public class ProducerBuilder {
      * The class of type org.apache.kafka.common.security.auth.SslEngineFactory to provide SSLEngine
      * objects. Default value is org.apache.kafka.common.security.ssl.DefaultSslEngineFactory
      */
-    public ProducerBuilder sslEngineFactoryClass(Class<?> sslEngineFactoryClass) {
+    public ConsumerBuilder sslEngineFactoryClass(Class<?> sslEngineFactoryClass) {
         return config(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, sslEngineFactoryClass);
     }
 
@@ -861,7 +957,7 @@ public class ProducerBuilder {
      * The password of the private key in the key store file orthe PEM key specified in `ssl.keystore.key'.
      * This is required for clients only if two-way authentication is configured.
      */
-    public ProducerBuilder sslKeyPassword(String sslKeyPassword) {
+    public ConsumerBuilder sslKeyPassword(String sslKeyPassword) {
         return config(SslConfigs.SSL_KEY_PASSWORD_CONFIG, sslKeyPassword);
     }
 
@@ -869,7 +965,7 @@ public class ProducerBuilder {
      * The algorithm used by key manager factory for SSL connections. Default value is the key manager
      * factory algorithm configured for the Java Virtual Machine.
      */
-    public ProducerBuilder sslKeymanagerAlgorithm(String sslKeymanagerAlgorithm) {
+    public ConsumerBuilder sslKeymanagerAlgorithm(String sslKeymanagerAlgorithm) {
         return config(SslConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, sslKeymanagerAlgorithm);
     }
 
@@ -877,7 +973,7 @@ public class ProducerBuilder {
      * Certificate chain in the format specified by 'ssl.keystore.type'. Default SSL engine factory
      * supports only PEM format with a list of X.509 certificates
      */
-    public ProducerBuilder sslKeystoreCertificateChain(String sslKeystoreCertificateChain) {
+    public ConsumerBuilder sslKeystoreCertificateChain(String sslKeystoreCertificateChain) {
         return config(SslConfigs.SSL_KEYSTORE_CERTIFICATE_CHAIN_CONFIG, sslKeystoreCertificateChain);
     }
 
@@ -886,7 +982,7 @@ public class ProducerBuilder {
      * PEM format with PKCS#8 keys. If the key is encrypted, key password must be specified using
      * 'ssl.key.password'
      */
-    public ProducerBuilder sslKeystoreKey(String sslKeystoreKey) {
+    public ConsumerBuilder sslKeystoreKey(String sslKeystoreKey) {
         return config(SslConfigs.SSL_KEYSTORE_KEY_CONFIG, sslKeystoreKey);
     }
 
@@ -894,7 +990,7 @@ public class ProducerBuilder {
      * The location of the key store file. This is optional for client and can be used for two-way
      * authentication for client.
      */
-    public ProducerBuilder sslKeystoreLocation(String sslKeystoreLocation) {
+    public ConsumerBuilder sslKeystoreLocation(String sslKeystoreLocation) {
         return config(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, sslKeystoreLocation);
     }
 
@@ -902,14 +998,14 @@ public class ProducerBuilder {
      * The store password for the key store file. This is optional for client and only needed if
      * 'ssl.keystore.location' is configured.  Key store password is not supported for PEM format.
      */
-    public ProducerBuilder sslKeystorePassword(String sslKeystorePassword) {
+    public ConsumerBuilder sslKeystorePassword(String sslKeystorePassword) {
         return config(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sslKeystorePassword);
     }
 
     /**
      * The file format of the key store file. This is optional for client.
      */
-    public ProducerBuilder sslKeystoreType(String sslKeystoreType) {
+    public ConsumerBuilder sslKeystoreType(String sslKeystoreType) {
         return config(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, sslKeystoreType);
     }
 
@@ -923,7 +1019,7 @@ public class ProducerBuilder {
      * 'TLSv1.3' even if it is one of the values in ssl.enabled.protocols and the server only supports
      * 'TLSv1.3'.
      */
-    public ProducerBuilder sslProtocol(String sslProtocol) {
+    public ConsumerBuilder sslProtocol(String sslProtocol) {
         return config(SslConfigs.SSL_PROTOCOL_CONFIG, sslProtocol);
     }
 
@@ -931,14 +1027,14 @@ public class ProducerBuilder {
      * The name of the security provider used for SSL connections. Default value is the default security
      * provider of the JVM.
      */
-    public ProducerBuilder sslProvider(String sslProvider) {
+    public ConsumerBuilder sslProvider(String sslProvider) {
         return config(SslConfigs.SSL_PROVIDER_CONFIG, sslProvider);
     }
 
     /**
      * The SecureRandom PRNG implementation to use for SSL cryptography operations.
      */
-    public ProducerBuilder sslSecureRandomImplementation(String sslSecureRandomImplementation) {
+    public ConsumerBuilder sslSecureRandomImplementation(String sslSecureRandomImplementation) {
         return config(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG, sslSecureRandomImplementation);
     }
 
@@ -946,7 +1042,7 @@ public class ProducerBuilder {
      * The algorithm used by trust manager factory for SSL connections. Default value is the trust manager
      * factory algorithm configured for the Java Virtual Machine.
      */
-    public ProducerBuilder sslTrustmanagerAlgorithm(String sslTrustmanagerAlgorithm) {
+    public ConsumerBuilder sslTrustmanagerAlgorithm(String sslTrustmanagerAlgorithm) {
         return config(SslConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, sslTrustmanagerAlgorithm);
     }
 
@@ -954,14 +1050,14 @@ public class ProducerBuilder {
      * Trusted certificates in the format specified by 'ssl.truststore.type'. Default SSL engine factory
      * supports only PEM format with X.509 certificates.
      */
-    public ProducerBuilder sslTruststoreCertificates(String sslTruststoreCertificates) {
+    public ConsumerBuilder sslTruststoreCertificates(String sslTruststoreCertificates) {
         return config(SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG, sslTruststoreCertificates);
     }
 
     /**
      * The location of the trust store file.
      */
-    public ProducerBuilder sslTruststoreLocation(String sslTruststoreLocation) {
+    public ConsumerBuilder sslTruststoreLocation(String sslTruststoreLocation) {
         return config(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslTruststoreLocation);
     }
 
@@ -970,86 +1066,40 @@ public class ProducerBuilder {
      * still be used, but integrity checking is disabled. Trust store password is not supported for PEM
      * format.
      */
-    public ProducerBuilder sslTruststorePassword(String sslTruststorePassword) {
+    public ConsumerBuilder sslTruststorePassword(String sslTruststorePassword) {
         return config(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, sslTruststorePassword);
     }
 
     /**
      * The file format of the trust store file.
      */
-    public ProducerBuilder sslTruststoreType(String sslTruststoreType) {
+    public ConsumerBuilder sslTruststoreType(String sslTruststoreType) {
         return config(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, sslTruststoreType);
-    }
-
-    /**
-     * The maximum amount of time in ms that the transaction coordinator will wait for a transaction status
-     * update from the producer before proactively aborting the ongoing transaction.If this value is larger
-     * than the transaction.max.timeout.ms setting in the broker, the request will fail with a
-     * <code>InvalidTxnTimeoutException</code> error.
-     */
-    public ProducerBuilder transactionTimeoutMs(int transactionTimeoutMs) {
-        return config(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs);
-    }
-
-    /**
-     * The TransactionalId to use for transactional delivery. This enables reliability semantics which span
-     * multiple producer sessions since it allows the client to guarantee that transactions using the same
-     * TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is
-     * provided, then the producer is limited to idempotent delivery. If a TransactionalId is configured,
-     * <code>enable.idempotence</code> is implied. By default the TransactionId is not configured, which
-     * means transactions cannot be used. Note that, by default, transactions require a cluster of at least
-     * three brokers which is the recommended setting for production; for development you can change this,
-     * by adjusting broker setting <code>transaction.state.log.replication.factor</code>.
-     */
-    public ProducerBuilder transactionalId(String transactionalId) {
-        return config(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
     }
 
     /**
      * Specify if the Serializer should use the latest subject version for serialization
      */
-    public ProducerBuilder useLatestVersion(boolean useLatestVersion) {
+    public ConsumerBuilder useLatestVersion(boolean useLatestVersion) {
         return config(AbstractKafkaSchemaSerDeConfig.USE_LATEST_VERSION, useLatestVersion);
     }
 
     /**
-     * Serializer class for value that implements the
-     * <code>org.apache.kafka.common.serialization.Serializer</code> interface.
+     * Deserializer class for value that implements the
+     * <code>org.apache.kafka.common.serialization.Deserializer</code> interface.
      */
-    public ProducerBuilder valueSerializer(Class<? extends Serializer<?>> valueSerializer) {
-        return config(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
+    public ConsumerBuilder valueDeserializer(Class<? extends Deserializer<?>> valueDeserializer) {
+        return config(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
     }
 
     /**
      * Determines how to construct the subject name under which the value schema is registered with the
      * schema registry. By default, <topic>-value is used as subject.
      */
-    public ProducerBuilder valueSubjectNameStrategy(Class<?> valueSubjectNameStrategy) {
+    public ConsumerBuilder valueSubjectNameStrategy(Class<?> valueSubjectNameStrategy) {
         return config(AbstractKafkaSchemaSerDeConfig.VALUE_SUBJECT_NAME_STRATEGY, valueSubjectNameStrategy);
     }
 
     // ### AUTOGENERATED BUILDER METHODS END ###
-
-    public <KeyT, ValueT> Producer<KeyT, ValueT> build() {
-        return new KafkaProducer<>(this.config);
-    }
-
-    public <KeyT, ValueT, ResultT> ResultT execute(ProducerCallback<KeyT, ValueT, ResultT> callback) {
-        try (final Producer<KeyT, ValueT> producer = this.build()) {
-            final ResultT result = CheckedExceptionUtils.wrapCheckedFunction(callback::execute)
-                    .apply(producer);
-
-            producer.flush();
-
-            return result;
-        }
-    }
-
-    public <KeyT, ValueT> void execute(ProducerCallbackVoid<KeyT, ValueT> callback) {
-        execute((ProducerCallback<KeyT, ValueT, Void>) producer -> {
-            callback.execute(producer);
-            return null;
-        });
-    }
 
 }

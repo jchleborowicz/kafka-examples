@@ -7,7 +7,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.producerBuilder;
 
 public class TestProducerMain {
 

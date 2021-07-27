@@ -4,11 +4,11 @@ import java.time.Duration;
 
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import pl.jch.tests.kafka.utils.kafka.AutoOffsetReset;
 import pl.jch.tests.kafka.utils.Topics;
+import pl.jch.tests.kafka.utils.kafka.AutoOffsetReset;
 
-import static pl.jch.tests.kafka.utils.KafkaBuilders.consumerBuilder;
-import static pl.jch.tests.kafka.utils.KafkaBuilders.pollingConsumerCallbackBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.consumerBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.pollingConsumerCallbackBuilder;
 
 public class AvroCustomerConsumerMain {
 

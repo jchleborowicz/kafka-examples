@@ -5,7 +5,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.function.Consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import pl.jch.tests.kafka.utils.ConsumerBuilder;
+import pl.jch.tests.kafka.utils.builders.ConsumerBuilder;
 
 public class WakeupMain {
 

@@ -9,7 +9,7 @@ import pl.jch.tests.kafka.model.Customer;
 import pl.jch.tests.kafka.serializer.CustomerSerializer;
 import pl.jch.tests.kafka.utils.Topics;
 
-import static pl.jch.tests.kafka.utils.KafkaBuilders.producerBuilder;
+import static pl.jch.tests.kafka.utils.builders.KafkaBuilders.producerBuilder;
 
 public class TestCustomerProducerMain {
 

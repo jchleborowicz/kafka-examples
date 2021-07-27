@@ -1,4 +1,4 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.builders;
 
 import io.confluent.kafka.serializers.KafkaAvroDeserializer;
 import lombok.experimental.UtilityClass;

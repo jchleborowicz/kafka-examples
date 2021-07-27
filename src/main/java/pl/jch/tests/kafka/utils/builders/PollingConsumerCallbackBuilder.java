@@ -1,4 +1,4 @@
-package pl.jch.tests.kafka.utils;
+package pl.jch.tests.kafka.utils.builders;
 
 import java.time.Duration;
 import java.util.function.Consumer;
