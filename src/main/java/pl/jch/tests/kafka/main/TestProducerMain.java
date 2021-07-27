@@ -15,7 +15,7 @@ public class TestProducerMain {
 
     public static void main(String[] args) {
         producerBuilder()
-                .execute(TestProducerMain::execute);
+                .buildAndExecute(TestProducerMain::execute);
     }
 
     private static void execute(Producer<String, String> producer) {

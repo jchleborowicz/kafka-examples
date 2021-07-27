@@ -30,7 +30,7 @@ public final class AdminClientBuilder {
         return AdminClient.create(properties);
     }
 
-    public void execute(CheckedConsumer<AdminClient> callback) {
+    public void buildAndExecute(CheckedConsumer<AdminClient> callback) {
         try (AdminClient adminClient = this.build()) {
             wrapCheckedConsumer(callback)
                     .accept(adminClient);

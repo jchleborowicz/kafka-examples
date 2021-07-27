@@ -18,7 +18,7 @@ public class AvroUserProducerMain {
 
     public static void main(String[] args) {
         producerBuilder(StringSerializer.class, KafkaAvroSerializer.class)
-                .execute(AvroUserProducerMain::execute);
+                .buildAndExecute(AvroUserProducerMain::execute);
     }
 
     private static void execute(Producer<CharSequence, User> producer)

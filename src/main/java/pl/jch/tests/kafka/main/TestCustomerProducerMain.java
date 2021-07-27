@@ -17,7 +17,7 @@ public class TestCustomerProducerMain {
 
     public static void main(String[] args) {
         producerBuilder(StringSerializer.class, CustomerSerializer.class)
-                .execute(TestCustomerProducerMain::execute);
+                .buildAndExecute(TestCustomerProducerMain::execute);
     }
 
     private static void execute(Producer<String, Customer> producer) throws ExecutionException, InterruptedException {

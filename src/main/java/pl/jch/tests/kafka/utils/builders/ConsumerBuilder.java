@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils;
 import pl.jch.tests.kafka.utils.kafka.AutoOffsetReset;
 
-@SuppressWarnings({"unused", "deprecation"})
+@SuppressWarnings({"unused", "deprecation", "UnusedReturnValue"})
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ConsumerBuilder {
 
@@ -48,18 +48,18 @@ public class ConsumerBuilder {
     }
 
     public <T, S> PollingConsumerCallbackBuilder<T, S> defineIncomingRecordsHandler() {
-        return PollingConsumerCallbackBuilder.builder(this::execute);
+        return PollingConsumerCallbackBuilder.builder(this::buildAndExecute);
     }
 
-    public <T, S, U> U execute(ConsumerCallback<T, S, U> callback) {
+    public <T, S, U> U buildAndExecute(ConsumerCallback<T, S, U> callback) {
         try (final Consumer<T, S> consumer = this.build()) {
             return CheckedExceptionUtils.wrapCheckedFunction(callback::execute)
                     .apply(consumer);
         }
     }
 
-    public <KeyT, ValueT> void execute(ConsumerCallbackVoid<KeyT, ValueT> callback) {
-        this.execute((Consumer<KeyT, ValueT> consumer) -> {
+    public <KeyT, ValueT> void buildAndExecute(ConsumerCallbackVoid<KeyT, ValueT> callback) {
+        this.buildAndExecute((Consumer<KeyT, ValueT> consumer) -> {
             addWakeupHook(consumer);
 
             try {

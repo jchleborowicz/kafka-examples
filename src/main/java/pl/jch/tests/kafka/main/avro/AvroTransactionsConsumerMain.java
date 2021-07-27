@@ -21,7 +21,7 @@ public class AvroTransactionsConsumerMain {
         consumerBuilder(StringDeserializer.class, KafkaAvroDeserializer.class)
                 .groupId("test-payments")
                 .specificAvroReader(true)
-                .execute(AvroTransactionsConsumerMain::execute);
+                .buildAndExecute(AvroTransactionsConsumerMain::execute);
     }
 
     @SuppressWarnings("InfiniteLoopStatement")

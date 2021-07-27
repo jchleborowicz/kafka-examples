@@ -19,7 +19,7 @@ public class AvroCustomerConsumerMain {
                 .groupId("test1")
                 .autoOffsetReset(AutoOffsetReset.EARLIEST)
                 .enableAutoCommit(false)
-                .execute(
+                .buildAndExecute(
                         pollingConsumerCallbackBuilder()
                                 .topic(TOPIC)
                                 .pollDuration(Duration.ofSeconds(5))

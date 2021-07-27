@@ -19,7 +19,7 @@ public class AvroTransactionsProducerMain {
 
     public static void main(final String[] args) {
         producerBuilder(StringSerializer.class, KafkaAvroSerializer.class)
-                .execute(AvroTransactionsProducerMain::execute);
+                .buildAndExecute(AvroTransactionsProducerMain::execute);
     }
 
     private static void execute(Producer<String, Payment> producer) {
