@@ -32,4 +32,8 @@ public class KafkaBuilders {
         return PollingConsumerCallbackBuilder.builder();
     }
 
+    public static AdminClientBuilder adminClientBuilder() {
+        return AdminClientBuilder.builder();
+    }
+
 }

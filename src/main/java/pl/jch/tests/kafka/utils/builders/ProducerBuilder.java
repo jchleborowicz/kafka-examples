@@ -92,7 +92,7 @@ public class ProducerBuilder {
      * equivalent to the acks=-1 setting.</ul>
      */
     public ProducerBuilder acks(Acks acks) {
-        return config(ProducerConfig.ACKS_CONFIG, acks);
+        return config(ProducerConfig.ACKS_CONFIG, acks.getId());
     }
 
     /**
