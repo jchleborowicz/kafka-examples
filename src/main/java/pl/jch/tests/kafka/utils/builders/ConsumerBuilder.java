@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils;
 import pl.jch.tests.kafka.utils.kafka.AutoOffsetReset;
 
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "deprecation"})
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ConsumerBuilder {
 
@@ -32,8 +32,8 @@ public class ConsumerBuilder {
 
     public static ConsumerBuilder builder() {
         return new ConsumerBuilder()
-                .bootstrapServers("localhost:9092")
-                .schemaRegistryUrl("http://localhost:8081")
+                .bootstrapServers(BuilderConstants.DEFAULT_BOOTSTRAP_SERVERS)
+                .schemaRegistryUrl(BuilderConstants.DEFAULT_SCHEMA_REFISTRY_URL)
                 .keyDeserializer(StringDeserializer.class)
                 .valueDeserializer(StringDeserializer.class)
                 .enableAutoCommit(true)
@@ -124,7 +124,7 @@ public class ConsumerBuilder {
      * consumer's group</li><li>anything else: throw exception to the consumer.</li></ul>
      */
     public ConsumerBuilder autoOffsetReset(AutoOffsetReset autoOffsetReset) {
-        return config(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset.getId());
+        return config(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset);
     }
 
     /**
@@ -145,8 +145,7 @@ public class ConsumerBuilder {
      * If true, use logical type converter in generic record
      */
     public ConsumerBuilder avroUseLogicalTypeConverters(boolean avroUseLogicalTypeConverters) {
-        return config(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG,
-                avroUseLogicalTypeConverters);
+        return config(KafkaAvroDeserializerConfig.AVRO_USE_LOGICAL_TYPE_CONVERTERS_CONFIG, avroUseLogicalTypeConverters);
     }
 
     /**
@@ -339,8 +338,7 @@ public class ConsumerBuilder {
         return config("internal.leave.group.on.close", internalLeaveGroupOnClose);
     }
 
-    public ConsumerBuilder internalThrowOnFetchStableOffsetUnsupported(
-            boolean internalThrowOnFetchStableOffsetUnsupported) {
+    public ConsumerBuilder internalThrowOnFetchStableOffsetUnsupported(boolean internalThrowOnFetchStableOffsetUnsupported) {
         return config("internal.throw.on.fetch.stable.offset.unsupported", internalThrowOnFetchStableOffsetUnsupported);
     }
 
@@ -707,10 +705,8 @@ public class ConsumerBuilder {
     /**
      * The endpoint identification algorithm to validate server hostname using server certificate.
      */
-    public ConsumerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(
-            String schemaRegistrySslEndpointIdentificationAlgorithm) {
-        return config("schema.registry.ssl.endpoint.identification.algorithm",
-                schemaRegistrySslEndpointIdentificationAlgorithm);
+    public ConsumerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(String schemaRegistrySslEndpointIdentificationAlgorithm) {
+        return config("schema.registry.ssl.endpoint.identification.algorithm", schemaRegistrySslEndpointIdentificationAlgorithm);
     }
 
     /**
@@ -802,8 +798,7 @@ public class ConsumerBuilder {
     /**
      * The SecureRandom PRNG implementation to use for SSL cryptography operations.
      */
-    public ConsumerBuilder schemaRegistrySslSecureRandomImplementation(
-            String schemaRegistrySslSecureRandomImplementation) {
+    public ConsumerBuilder schemaRegistrySslSecureRandomImplementation(String schemaRegistrySslSecureRandomImplementation) {
         return config("schema.registry.ssl.secure.random.implementation", schemaRegistrySslSecureRandomImplementation);
     }
 

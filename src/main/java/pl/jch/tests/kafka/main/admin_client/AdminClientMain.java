@@ -1,13 +1,23 @@
 package pl.jch.tests.kafka.main.admin_client;
 
-import java.util.Map;
+import java.util.concurrent.ExecutionException;
 
 import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.admin.AdminClientConfig;
+import pl.jch.tests.kafka.utils.builders.AdminClientBuilder;
 
 public class AdminClientMain {
+
     public static void main(String[] args) {
-        final AdminClient adminClient =
-                AdminClient.create(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092"));
+        AdminClientBuilder.builder()
+                .execute(AdminClientMain::execute);
+    }
+
+    private static void execute(AdminClient adminClient) throws ExecutionException, InterruptedException {
+        adminClient.listTopics()
+                .names()
+                .get()
+                .stream()
+                .sorted()
+                .forEach(System.out::println);
     }
 }

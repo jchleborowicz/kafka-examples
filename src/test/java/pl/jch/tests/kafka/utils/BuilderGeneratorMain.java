@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -20,6 +21,7 @@ import lombok.Builder;
 import lombok.Value;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -27,6 +29,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.singletonList;
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toMap;
@@ -135,7 +138,7 @@ public class BuilderGeneratorMain {
         BuilderGeneratorInput.builder()
                 .configDefs(asList(ProducerConfig.configDef(), getAvroSerializerConfigDef()))
                 .builderClassName("ProducerBuilder")
-                .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ProducerBuilder.java")
+                .builderFileName("src/main/java/pl/jch/tests/kafka/utils/builders/ProducerBuilder.java")
                 .constantsClasses(
                         asList(ProducerConfig.class, SaslConfigs.class, CommonClientConfigs.class, SslConfigs.class,
                                 KafkaAvroSerializerConfig.class, AbstractKafkaSchemaSerDeConfig.class))
@@ -145,10 +148,18 @@ public class BuilderGeneratorMain {
         BuilderGeneratorInput.builder()
                 .configDefs(asList(ConsumerConfig.configDef(), getAvroDeserializerConfigDef()))
                 .builderClassName("ConsumerBuilder")
-                .builderFileName("src/main/java/pl/jch/tests/kafka/utils/ConsumerBuilder.java")
+                .builderFileName("src/main/java/pl/jch/tests/kafka/utils/builders/ConsumerBuilder.java")
                 .constantsClasses(
                         asList(ConsumerConfig.class, SaslConfigs.class, SslConfigs.class, CommonClientConfigs.class,
                                 KafkaAvroDeserializerConfig.class, AbstractKafkaSchemaSerDeConfig.class))
+                .build()
+                .generate();
+
+        BuilderGeneratorInput.builder()
+                .configDefs(singletonList(AdminClientConfig.configDef()))
+                .builderClassName("AdminClientBuilder")
+                .builderFileName("src/main/java/pl/jch/tests/kafka/utils/builders/AdminClientBuilder.java")
+                .constantsClasses(asList(AdminClientConfig.class, SaslConfigs.class, SslConfigs.class))
                 .build()
                 .generate();
     }

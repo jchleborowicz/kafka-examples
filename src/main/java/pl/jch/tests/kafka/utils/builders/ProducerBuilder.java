@@ -18,17 +18,15 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import pl.jch.tests.kafka.utils.functions.CheckedExceptionUtils;
 import pl.jch.tests.kafka.utils.kafka.Acks;
 
-@SuppressWarnings("unused")
+@SuppressWarnings({"unused", "deprecation"})
 public class ProducerBuilder {
 
-    public static final String DEFAULT_BOOTSTRAP_SERVERS = "localhost:9092";
-    public static final String DEFAULT_SCHEMA_REFISTRY_URL = "http://localhost:8081";
     final Map<String, Object> config = new HashMap<>();
 
     public static ProducerBuilder builder() {
         return new ProducerBuilder()
-                .bootstrapServers(DEFAULT_BOOTSTRAP_SERVERS)
-                .schemaRegistryUrl(DEFAULT_SCHEMA_REFISTRY_URL)
+                .bootstrapServers(BuilderConstants.DEFAULT_BOOTSTRAP_SERVERS)
+                .schemaRegistryUrl(BuilderConstants.DEFAULT_SCHEMA_REFISTRY_URL)
                 .acks(Acks.ALL)
                 .keySerializer(StringSerializer.class)
                 .valueSerializer(StringSerializer.class)
@@ -71,7 +69,7 @@ public class ProducerBuilder {
      * equivalent to the acks=-1 setting.</ul>
      */
     public ProducerBuilder acks(Acks acks) {
-        return config(ProducerConfig.ACKS_CONFIG, acks.getId());
+        return config(ProducerConfig.ACKS_CONFIG, acks);
     }
 
     /**
@@ -630,10 +628,8 @@ public class ProducerBuilder {
     /**
      * The endpoint identification algorithm to validate server hostname using server certificate.
      */
-    public ProducerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(
-            String schemaRegistrySslEndpointIdentificationAlgorithm) {
-        return config("schema.registry.ssl.endpoint.identification.algorithm",
-                schemaRegistrySslEndpointIdentificationAlgorithm);
+    public ProducerBuilder schemaRegistrySslEndpointIdentificationAlgorithm(String schemaRegistrySslEndpointIdentificationAlgorithm) {
+        return config("schema.registry.ssl.endpoint.identification.algorithm", schemaRegistrySslEndpointIdentificationAlgorithm);
     }
 
     /**
@@ -725,8 +721,7 @@ public class ProducerBuilder {
     /**
      * The SecureRandom PRNG implementation to use for SSL cryptography operations.
      */
-    public ProducerBuilder schemaRegistrySslSecureRandomImplementation(
-            String schemaRegistrySslSecureRandomImplementation) {
+    public ProducerBuilder schemaRegistrySslSecureRandomImplementation(String schemaRegistrySslSecureRandomImplementation) {
         return config("schema.registry.ssl.secure.random.implementation", schemaRegistrySslSecureRandomImplementation);
     }
 
